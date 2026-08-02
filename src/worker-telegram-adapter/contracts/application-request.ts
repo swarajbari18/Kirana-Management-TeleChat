@@ -15,6 +15,7 @@ export interface ApplicationRequestInbound {
   kind: "text" | "command";
   text: string;
   command?: string;
+  entities?: Array<{ type: string; offset: number; length: number }>;
 }
 
 export interface ApplicationRequestConversation {

@@ -6,7 +6,7 @@ export interface TurnInsert {
   id: string;
   sessionId: string;
   updateId: number;
-  role: "user";
+  role: "user" | "assistant";
   rawText: string;
   contextText: string;
   inboundKind: "text" | "command";

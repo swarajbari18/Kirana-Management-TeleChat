@@ -9,9 +9,10 @@ export interface ExecutionContext {
 
 export function createExecutionContext(
   request: ApplicationRequest,
+  correlationId?: string,
 ): ExecutionContext {
   return {
-    correlationId: crypto.randomUUID(),
+    correlationId: correlationId ?? crypto.randomUUID(),
     storeId: request.storeId,
     updateId: request.transport.updateId,
     startTime: Date.now(),

@@ -9,6 +9,9 @@
  * Covers production validation Part C (HTTP edge cases) and Part E (security)
  * without manual curl. Part A/B (Telegram happy path) remain manual in Telegram.
  *
+ * LIMITATIONS (C3 audit): HTTP 200-only tests cannot detect Gemini or delivery
+ * failures. See gemini-production.integration.test.ts and delivery-policy.test.ts.
+ *
  * When `WORKER_WEBHOOK_URL` and `WEBHOOK_SECRET` are set in `.dev.vars`, these
  * tests POST to the live worker. When secrets are absent (e.g. CI), tests
  * skip gracefully.

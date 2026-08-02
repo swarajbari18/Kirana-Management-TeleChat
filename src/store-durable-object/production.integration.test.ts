@@ -1,6 +1,13 @@
 /**
  * Production-first integration tests for the DO Runtime Kernel.
  * POST to the deployed Worker webhook — no mocks.
+ *
+ * LIMITATIONS (C3 audit):
+ * - P1–P5 assert HTTP 200 only (same as Component 1/2). That cannot detect
+ *   Gemini failures, wrong model id, or missing Telegram delivery.
+ * - G1/G2 in gemini-production.integration.test.ts hit the real Gemini API.
+ * - delivery-policy.test.ts guards error-result delivery to Telegram.
+ * - Full Telegram reply verification still requires manual check or wrangler tail.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -17,11 +24,16 @@ import {
 
 const WORKER_WEBHOOK_URL = process.env.WORKER_WEBHOOK_URL;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const hasWebhookConfig = Boolean(WORKER_WEBHOOK_URL && WEBHOOK_SECRET);
+const hasOrchestrationConfig = Boolean(hasWebhookConfig && GEMINI_API_KEY);
 
 const skipReason =
   "Set WORKER_WEBHOOK_URL and WEBHOOK_SECRET in .dev.vars (see .dev.vars.example). Deploy worker first — see running.md.";
+
+const orchestrationSkipReason =
+  "Set WORKER_WEBHOOK_URL, WEBHOOK_SECRET, and GEMINI_API_KEY in .dev.vars. Deploy worker first.";
 
 function webhookUrl(): string {
   if (!WORKER_WEBHOOK_URL) {
@@ -146,5 +158,27 @@ describe("store durable object production integration", () => {
       });
       expect(response.status).toBe(403);
     },
+  );
+
+  it.skipIf(!hasOrchestrationConfig)(
+    `P6 orchestration plain text → 200 fast ack (${orchestrationSkipReason})`,
+    async () => {
+      const uniqueSuffix = Date.now();
+      const update = textMessageUpdate({
+        updateId: uniqueSuffix,
+        messageId: uniqueSuffix,
+        userId: INTEGRATION_PROBE_USER_ID,
+        chatId: INTEGRATION_PROBE_CHAT_ID,
+        text: "integration orchestration probe — what is my shop profile?",
+      });
+
+      const start = Date.now();
+      const response = await postUpdate(update);
+      const durationMs = Date.now() - start;
+
+      expect(response.status).toBe(200);
+      expect(durationMs).toBeLessThan(5000);
+    },
+    15_000,
   );
 });

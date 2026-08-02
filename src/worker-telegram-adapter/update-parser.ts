@@ -1,4 +1,4 @@
-import type { Update } from "@grammyjs/types";
+import type { MessageEntity, Update } from "@grammyjs/types";
 import { parseBotCommand } from "./telegram/command-parser.js";
 
 export interface SupportedUpdate {
@@ -12,6 +12,17 @@ export interface SupportedUpdate {
   inboundKind: "text" | "command";
   command?: string;
   resetRequested: boolean;
+  entities?: MessageEntity[];
+}
+
+export interface CallbackQueryUpdate {
+  kind: "callback_query";
+  updateId: number;
+  callbackQueryId: string;
+  userId: number;
+  chatId?: number;
+  timestamp: number;
+  data: string;
 }
 
 export interface UnsupportedUpdate {
@@ -20,12 +31,31 @@ export interface UnsupportedUpdate {
   chatId?: number;
 }
 
-export type ParsedUpdate = SupportedUpdate | UnsupportedUpdate;
+export type ParsedUpdate =
+  | SupportedUpdate
+  | CallbackQueryUpdate
+  | UnsupportedUpdate;
 
 export function parseUpdate(update: Update): ParsedUpdate {
   const updateId = update.update_id;
 
-  if (update.edited_message || update.callback_query || update.inline_query) {
+  if (update.callback_query) {
+    const cq = update.callback_query;
+    if (!cq.from || !cq.data) {
+      return { kind: "unsupported", updateId };
+    }
+    return {
+      kind: "callback_query",
+      updateId,
+      callbackQueryId: cq.id,
+      userId: cq.from.id,
+      chatId: cq.message?.chat.id,
+      timestamp: cq.message?.date ?? Math.floor(Date.now() / 1000),
+      data: cq.data,
+    };
+  }
+
+  if (update.edited_message || update.inline_query) {
     return { kind: "unsupported", updateId };
   }
 
@@ -55,5 +85,6 @@ export function parseUpdate(update: Update): ParsedUpdate {
     inboundKind: parsedCommand ? "command" : "text",
     command: parsedCommand?.command,
     resetRequested: parsedCommand?.resetRequested ?? false,
+    entities: message.entities,
   };
 }

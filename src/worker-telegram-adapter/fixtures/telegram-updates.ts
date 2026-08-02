@@ -157,14 +157,36 @@ export function editedMessageUpdate(): Update {
   };
 }
 
-export function callbackQueryUpdate(): Update {
+export function callbackQueryUpdate(
+  overrides: Partial<{
+    updateId: number;
+    callbackQueryId: string;
+    userId: number;
+    chatId: number;
+    data: string;
+  }> = {},
+): Update {
   return {
-    update_id: 7,
+    update_id: overrides.updateId ?? 7,
     callback_query: {
-      id: "cq1",
-      from: { id: FIXTURE_USER_ID, is_bot: false, first_name: "Test" },
+      id: overrides.callbackQueryId ?? "cq1",
+      from: {
+        id: overrides.userId ?? FIXTURE_USER_ID,
+        is_bot: false,
+        first_name: "Test",
+      },
       chat_instance: "ci",
-      data: "data",
+      data: overrides.data ?? "confirm:00000000-0000-4000-8000-000000000001:yes",
+      message: {
+        message_id: 99,
+        date: 99,
+        chat: {
+          id: overrides.chatId ?? FIXTURE_CHAT_ID,
+          type: "private",
+          first_name: "Test",
+        },
+        text: "confirm",
+      },
     },
   };
 }

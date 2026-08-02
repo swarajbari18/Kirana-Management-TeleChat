@@ -20,3 +20,14 @@ export async function persistTurn(
     ...input,
   });
 }
+
+export async function persistAssistantTurn(
+  db: StoreDatabase,
+  input: Omit<TurnInsert, "id" | "role">,
+): Promise<void> {
+  await insertTurn(db, {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    ...input,
+  });
+}

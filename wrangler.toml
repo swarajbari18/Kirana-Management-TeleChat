@@ -16,6 +16,11 @@ bindings = [
 tag = "v1"
 new_sqlite_classes = ["StoreDurableObject"]
 
+[[services]]
+binding = "TELEGRAM_DELIVERY"
+service = "kirana-telechat"
+entrypoint = "TelegramDeliveryService"
+
 # Workers Observability — logs and traces are separate features.
 # Logs: console.log + invocation metadata (what we use for transport JSON).
 # Traces: OpenTelemetry request spans (optional; enable separately below).

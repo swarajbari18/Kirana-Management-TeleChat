@@ -1,8 +1,15 @@
 import type { Env } from "../env.js";
-import type { ApplicationRequest, ExecutionResult } from "./contracts/index.js";
+import type {
+  ApplicationRequest,
+  ConfirmationCallbackRequest,
+  ExecutionResult,
+} from "./contracts/index.js";
 
 export interface StoreDurableObjectRpc {
   handleApplicationRequest(request: ApplicationRequest): Promise<ExecutionResult>;
+  handleConfirmationCallback(
+    request: ConfirmationCallbackRequest,
+  ): Promise<void>;
   confirmTelegramDelivery(updateId: number): Promise<void>;
 }
 

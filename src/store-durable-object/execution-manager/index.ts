@@ -1,11 +1,16 @@
+import type { Env } from "../../env.js";
 import type { ApplicationRequest } from "../../worker-telegram-adapter/contracts/index.js";
+import type { ConfirmationCallbackRequest } from "../../worker-telegram-adapter/contracts/index.js";
 import type { ExecutionResult } from "../../worker-telegram-adapter/contracts/index.js";
 import { orchestrate } from "../../global-orchestrator/index.js";
 import {
   WELCOME_MESSAGE,
   WELCOME_MESSAGE_FIRST_START,
 } from "../constants.js";
-import { process as processConversation } from "../conversation-manager/index.js";
+import {
+  persistAssistantTurn,
+  process as processConversation,
+} from "../conversation-manager/index.js";
 import {
   emitDeliveryConfirmedLog,
   emitRuntimeLog,
@@ -16,8 +21,16 @@ import {
   markTelegramDelivered,
   recordLedgerEntry,
 } from "../persistence/repositories/execution-ledger-repository.js";
+import { enqueueWorkItem } from "../persistence/repositories/work-queue-repository.js";
+import { getPendingConfirmation } from "../persistence/repositories/pending-confirmation-repository.js";
 import { setInitializedAt } from "../persistence/repositories/store-meta-repository.js";
+import type { ConfirmationRegistry } from "../runtime-ports/confirmation-registry.js";
+import {
+  createWorkerDeliveryPort,
+  finalizeConfirmationResolution,
+} from "../runtime-ports/worker-delivery-port.js";
 import { createExecutionContext } from "./execution-context.js";
+import { shouldDeliverOutbound } from "./delivery-policy.js";
 
 const EMPTY_OK: ExecutionResult = {
   status: "ok",
@@ -31,45 +44,40 @@ const ERROR_RESULT: ExecutionResult = {
   attachments: [],
 };
 
-export async function execute(
+export async function enqueueRequest(
   request: ApplicationRequest,
   db: StoreDatabase,
-): Promise<ExecutionResult> {
-  const ctx = createExecutionContext(request);
+): Promise<boolean> {
+  const existing = await findLedgerByUpdateId(db, request.transport.updateId);
+  if (existing?.telegramDelivered) {
+    return false;
+  }
+
+  await enqueueWorkItem(db, {
+    updateId: request.transport.updateId,
+    requestJson: JSON.stringify(request),
+  });
+  return true;
+}
+
+export interface ProcessWorkItemInput {
+  request: ApplicationRequest;
+  db: StoreDatabase;
+  env: Env;
+  correlationId: string;
+  confirmationRegistry: ConfirmationRegistry;
+  confirmTelegramDelivery: (updateId: number) => Promise<void>;
+}
+
+export async function processWorkItem(
+  input: ProcessWorkItemInput,
+): Promise<void> {
+  const { request, db, env, correlationId, confirmationRegistry } = input;
+  const ctx = createExecutionContext(request, correlationId);
   const startTime = ctx.startTime;
 
   const existing = await findLedgerByUpdateId(db, request.transport.updateId);
-  if (existing) {
-    if (existing.telegramDelivered) {
-      emitRuntimeLog({
-        layer: "runtime",
-        correlationId: ctx.correlationId,
-        updateId: request.transport.updateId,
-        storeId: request.storeId,
-        terminalStatus: "skipped_duplicate",
-        ledgerHit: true,
-        durationMs: Date.now() - startTime,
-        participatingComponents: ["execution-manager"],
-        failureReason: null,
-      });
-      return EMPTY_OK;
-    }
-
-    if (existing.resultJson) {
-      emitRuntimeLog({
-        layer: "runtime",
-        correlationId: ctx.correlationId,
-        updateId: request.transport.updateId,
-        storeId: request.storeId,
-        terminalStatus: "replay_cached",
-        ledgerHit: true,
-        durationMs: Date.now() - startTime,
-        participatingComponents: ["execution-manager"],
-        failureReason: null,
-      });
-      return JSON.parse(existing.resultJson) as ExecutionResult;
-    }
-
+  if (existing?.telegramDelivered) {
     emitRuntimeLog({
       layer: "runtime",
       correlationId: ctx.correlationId,
@@ -81,8 +89,21 @@ export async function execute(
       participatingComponents: ["execution-manager"],
       failureReason: null,
     });
-    return EMPTY_OK;
+    return;
   }
+
+  if (existing?.resultJson && existing.telegramDelivered) {
+    return;
+  }
+
+  const runtimePorts = createWorkerDeliveryPort({
+    env,
+    db,
+    storeId: request.storeId,
+    correlationId: ctx.correlationId,
+    updateId: request.transport.updateId,
+    confirmationRegistry,
+  });
 
   const participatingComponents = ["execution-manager"];
   let sessionId: string | undefined;
@@ -99,25 +120,56 @@ export async function execute(
       request.inbound.command === "start"
     ) {
       result = await handleStart(db, conversationContext.storeInitialized);
+      participatingComponents.push("start-handler");
     } else {
-      participatingComponents.push("stub-orchestrator");
-      result = orchestrate(conversationContext);
+      participatingComponents.push("global-orchestrator");
+      result = await orchestrate(
+        {
+          ...conversationContext,
+          storeId: request.storeId,
+          correlationId: ctx.correlationId,
+          updateId: request.transport.updateId,
+          chatId: request.delivery.chatId,
+          inbound: request.inbound,
+          geminiApiKey: env.GEMINI_API_KEY,
+        },
+        runtimePorts,
+        db,
+      );
     }
 
-    const handedToWorker =
-      result.status === "ok" &&
-      (result.messages.length > 0 || result.attachments.length > 0);
+    const deliver = shouldDeliverOutbound(result);
 
-    // Component 2: text-only results. When attachments contain ArrayBuffer,
-    // result_json serialization must use base64 (future Billing capability).
-    const resultJson = handedToWorker ? JSON.stringify(result) : null;
+    if (deliver) {
+      await runtimePorts.deliverOutbound({
+        chatId: request.delivery.chatId,
+        result,
+        replyToMessageId: request.delivery.replyToMessageId,
+      });
+
+      await input.confirmTelegramDelivery(request.transport.updateId);
+
+      if (result.status === "ok") {
+        for (const message of result.messages) {
+          if (message.type === "text") {
+            await persistAssistantTurn(db, {
+              sessionId,
+              text: message.text,
+              updateId: request.transport.updateId,
+            });
+          }
+        }
+      }
+    }
+
+    const resultJson = deliver ? JSON.stringify(result) : null;
 
     await recordLedgerEntry(db, {
       updateId: request.transport.updateId,
       correlationId: ctx.correlationId,
       terminalStatus: result.status === "ok" ? "ok" : "error",
-      handedToWorker,
-      telegramDelivered: false,
+      handedToWorker: deliver,
+      telegramDelivered: deliver,
       resultJson,
       completedAt: new Date().toISOString(),
     });
@@ -134,8 +186,6 @@ export async function execute(
       participatingComponents,
       failureReason: null,
     });
-
-    return result;
   } catch (error) {
     failureReason = error instanceof Error ? error.message : "UnknownError";
 
@@ -167,7 +217,46 @@ export async function execute(
       failureReason,
     });
 
-    return ERROR_RESULT;
+    await runtimePorts.deliverOutbound({
+      chatId: request.delivery.chatId,
+      result: ERROR_RESULT,
+      replyToMessageId: request.delivery.replyToMessageId,
+    });
+  }
+}
+
+export async function handleConfirmationCallback(
+  request: ConfirmationCallbackRequest,
+  db: StoreDatabase,
+  confirmationRegistry: ConfirmationRegistry,
+): Promise<void> {
+  const row = await getPendingConfirmation(db, request.confirmationId);
+  if (!row || row.status !== "awaiting") {
+    return;
+  }
+
+  const outcome = request.approved ? "approved" : "denied";
+  const resolved = confirmationRegistry.resolve(
+    request.confirmationId,
+    outcome,
+  );
+
+  await finalizeConfirmationResolution(db, {
+    confirmationId: request.confirmationId,
+    status: outcome,
+    callbackQueryId: request.callbackQueryId,
+  });
+
+  if (!resolved) {
+    // Isolate may have restarted — callback still persisted in SQLite.
+    console.log(
+      JSON.stringify({
+        layer: "runtime",
+        action: "confirmation_callback_persisted",
+        confirmationId: request.confirmationId,
+        outcome,
+      }),
+    );
   }
 }
 

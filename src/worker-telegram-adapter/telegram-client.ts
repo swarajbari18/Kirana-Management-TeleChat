@@ -1,5 +1,7 @@
 import type { OutboundAttachment } from "./contracts/index.js";
 
+import type { InlineKeyboardMarkup } from "./contracts/index.js";
+
 export class TelegramApiError extends Error {
   readonly status: number;
   readonly responseBody: string;
@@ -15,6 +17,7 @@ export class TelegramApiError extends Error {
 export interface SendMessageOptions {
   parseMode?: "Markdown" | "HTML";
   replyToMessageId?: number;
+  replyMarkup?: InlineKeyboardMarkup;
 }
 
 const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
@@ -35,6 +38,9 @@ export async function sendMessage(
   }
   if (options?.replyToMessageId !== undefined) {
     body.reply_to_message_id = options.replyToMessageId;
+  }
+  if (options?.replyMarkup) {
+    body.reply_markup = options.replyMarkup;
   }
 
   const response = await fetch(
@@ -85,6 +91,33 @@ export async function sendDocument(
     {
       method: "POST",
       body: formData,
+    },
+  );
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new TelegramApiError(response.status, responseBody);
+  }
+}
+
+export async function answerCallbackQuery(
+  botToken: string,
+  callbackQueryId: string,
+  text?: string,
+): Promise<void> {
+  const body: Record<string, unknown> = {
+    callback_query_id: callbackQueryId,
+  };
+  if (text) {
+    body.text = text;
+  }
+
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/answerCallbackQuery`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     },
   );
 

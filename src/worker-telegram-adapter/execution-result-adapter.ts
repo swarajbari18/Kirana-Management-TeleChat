@@ -44,6 +44,7 @@ export async function deliver(
         {
           parseMode: message.parseMode,
           replyToMessageId: delivery.replyToMessageId,
+          replyMarkup: message.replyMarkup,
         },
       );
     }

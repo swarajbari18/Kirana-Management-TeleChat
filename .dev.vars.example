@@ -1,6 +1,9 @@
 # Copy to .dev.vars (gitignored) — never commit real values
 BOT_TOKEN=xxxxx
 WEBHOOK_SECRET=xxxxx
+GEMINI_API_KEY=xxxxx
+
+# Required for npm test Gemini production suite (G1/G2) and orchestration path (P6)
 
 # Full deployed webhook URL — MUST include /webhook path
 # Set after npm run deploy; used by production integration tests and setWebhook

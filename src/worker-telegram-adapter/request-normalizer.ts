@@ -22,6 +22,11 @@ export function normalizeRequest(
       kind: supported.inboundKind,
       text: supported.text,
       command: supported.command,
+      entities: supported.entities?.map((e) => ({
+        type: e.type,
+        offset: e.offset,
+        length: e.length,
+      })),
     },
     conversation: {
       resetRequested: supported.resetRequested,

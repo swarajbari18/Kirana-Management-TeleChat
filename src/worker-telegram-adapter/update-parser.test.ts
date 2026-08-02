@@ -75,8 +75,12 @@ describe("parseUpdate", () => {
     expect(result.kind).toBe("unsupported");
   });
 
-  it("marks callback_query as unsupported", () => {
+  it("parses callback_query as callback_query kind", () => {
     const result = parseUpdate(callbackQueryUpdate());
-    expect(result).toEqual({ kind: "unsupported", updateId: 7 });
+    expect(result).toMatchObject({
+      kind: "callback_query",
+      updateId: 7,
+      callbackQueryId: "cq1",
+    });
   });
 });

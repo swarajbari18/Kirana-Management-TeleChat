@@ -2,6 +2,11 @@ export interface OutboundMessage {
   type: "text";
   text: string;
   parseMode?: "Markdown" | "HTML";
+  replyMarkup?: InlineKeyboardMarkup;
+}
+
+export interface InlineKeyboardMarkup {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
 }
 
 export interface OutboundAttachment {

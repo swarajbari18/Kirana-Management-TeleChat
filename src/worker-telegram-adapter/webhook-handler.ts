@@ -1,16 +1,20 @@
 import type { Env } from "../env.js";
 import { UNSUPPORTED_MESSAGE } from "./constants.js";
+import { dispatchConfirmationCallback } from "./callback-dispatcher.js";
 import { resolveStoreDurableObject } from "./do-resolver.js";
 import { IdentityError, resolveStoreId } from "./identity-resolver.js";
 import { emitTransportLog } from "./observability.js";
-import { scheduleDispatch } from "./request-dispatcher.js";
+import {
+  buildApplicationRequest,
+  dispatchToStore,
+} from "./request-dispatcher.js";
 import { parseUpdate } from "./update-parser.js";
 import * as telegramClient from "./telegram-client.js";
 
 export async function handleWebhook(
   request: Request,
   env: Env,
-  ctx: ExecutionContext,
+  _ctx: ExecutionContext,
 ): Promise<Response> {
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
@@ -68,13 +72,33 @@ export async function handleWebhook(
       return new Response("OK", { status: 200 });
     }
 
+    if (parsed.kind === "callback_query") {
+      const storeId = String(parsed.userId);
+      const resolved = resolveStoreDurableObject(env, storeId);
+
+      await dispatchConfirmationCallback(
+        env,
+        resolved,
+        parsed,
+        storeId,
+        { workerRequestId, startTime },
+      );
+
+      return new Response("OK", { status: 200 });
+    }
+
     const storeId = resolveStoreId(parsed);
     const resolved = resolveStoreDurableObject(env, storeId);
+    const applicationRequest = buildApplicationRequest(parsed, storeId);
 
-    scheduleDispatch(ctx, env, parsed, storeId, resolved, {
-      workerRequestId,
-      startTime,
-    });
+    await dispatchToStore(
+      env,
+      resolved,
+      applicationRequest,
+      parsed,
+      storeId,
+      { workerRequestId, startTime },
+    );
 
     return new Response("OK", { status: 200 });
   } catch (error) {

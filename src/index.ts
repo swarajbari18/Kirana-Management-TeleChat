@@ -1,8 +1,9 @@
 import type { Env } from "./env.js";
 import { handleWebhook } from "./worker-telegram-adapter/index.js";
 import { StoreDurableObject } from "./store-durable-object/index.js";
+import { TelegramDeliveryService } from "./worker-telegram-adapter/telegram-delivery-service.js";
 
-export { StoreDurableObject };
+export { StoreDurableObject, TelegramDeliveryService };
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

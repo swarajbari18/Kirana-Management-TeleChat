@@ -3,7 +3,8 @@ export type TransportResultStatus =
   | "skipped_delivery"
   | "unsupported"
   | "rejected"
-  | "error";
+  | "error"
+  | "accepted";
 
 export interface TransportLogEntry {
   layer: "transport";
@@ -15,7 +16,7 @@ export interface TransportLogEntry {
   durableObjectId?: string;
   durationMs: number;
   resultStatus: TransportResultStatus;
-  inboundKind?: "text" | "command";
+  inboundKind?: "text" | "command" | "callback_query";
   errorCode?: string;
 }
 

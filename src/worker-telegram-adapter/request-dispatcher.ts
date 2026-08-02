@@ -1,8 +1,7 @@
 import type { Env } from "../env.js";
 import type { ApplicationRequest } from "./contracts/index.js";
 import { GENERIC_ERROR_MESSAGE } from "./constants.js";
-import type { ResolvedStore, StoreDurableObjectRpc } from "./do-resolver.js";
-import { deliver } from "./execution-result-adapter.js";
+import type { ResolvedStore } from "./do-resolver.js";
 import { emitTransportLog } from "./observability.js";
 import { normalizeRequest } from "./request-normalizer.js";
 import type { SupportedUpdate } from "./update-parser.js";
@@ -13,40 +12,8 @@ export interface DispatchContext {
   startTime: number;
 }
 
-export function scheduleDispatch(
-  ctx: ExecutionContext,
-  env: Env,
-  supported: SupportedUpdate,
-  storeId: string,
-  resolved: ResolvedStore,
-  dispatchContext: DispatchContext,
-): void {
-  const applicationRequest = normalizeRequest(supported, storeId);
-
-  ctx.waitUntil(
-    dispatchPipeline(
-      env,
-      resolved,
-      applicationRequest,
-      supported,
-      storeId,
-      dispatchContext,
-    ),
-  );
-}
-
-async function confirmTelegramDeliveryWithRetry(
-  stub: StoreDurableObjectRpc,
-  updateId: number,
-): Promise<void> {
-  try {
-    await stub.confirmTelegramDelivery(updateId);
-  } catch {
-    await stub.confirmTelegramDelivery(updateId);
-  }
-}
-
-async function dispatchPipeline(
+// Part 2.9 — fast-ack DO RPC; no ctx.waitUntil for orchestration.
+export async function dispatchToStore(
   env: Env,
   resolved: ResolvedStore,
   applicationRequest: ApplicationRequest,
@@ -55,45 +22,7 @@ async function dispatchPipeline(
   dispatchContext: DispatchContext,
 ): Promise<void> {
   try {
-    const result = await resolved.stub.handleApplicationRequest(applicationRequest);
-
-    const hadOutbound =
-      result.status === "ok" &&
-      (result.messages.length > 0 || result.attachments.length > 0);
-
-    await deliver(result, {
-      chatId: supported.chatId,
-      replyToMessageId: supported.messageId,
-    }, env.BOT_TOKEN);
-
-    if (hadOutbound) {
-      try {
-        await confirmTelegramDeliveryWithRetry(
-          resolved.stub,
-          applicationRequest.transport.updateId,
-        );
-      } catch {
-        emitTransportLog({
-          layer: "transport",
-          workerRequestId: dispatchContext.workerRequestId,
-          updateId: supported.updateId,
-          messageId: supported.messageId,
-          chatId: supported.chatId,
-          storeId,
-          durableObjectId: resolved.durableObjectId,
-          durationMs: Date.now() - dispatchContext.startTime,
-          resultStatus: "error",
-          inboundKind: supported.inboundKind,
-          errorCode: "ConfirmDeliveryFailed",
-        });
-        return;
-      }
-    }
-
-    const skippedDelivery =
-      result.status === "ok" &&
-      result.messages.length === 0 &&
-      result.attachments.length === 0;
+    await resolved.stub.handleApplicationRequest(applicationRequest);
 
     emitTransportLog({
       layer: "transport",
@@ -104,7 +33,7 @@ async function dispatchPipeline(
       storeId,
       durableObjectId: resolved.durableObjectId,
       durationMs: Date.now() - dispatchContext.startTime,
-      resultStatus: skippedDelivery ? "skipped_delivery" : "success",
+      resultStatus: "accepted",
       inboundKind: supported.inboundKind,
     });
   } catch (error) {
@@ -136,4 +65,11 @@ async function dispatchPipeline(
       // Best-effort user notification; transport log already recorded.
     }
   }
+}
+
+export function buildApplicationRequest(
+  supported: SupportedUpdate,
+  storeId: string,
+): ApplicationRequest {
+  return normalizeRequest(supported, storeId);
 }
