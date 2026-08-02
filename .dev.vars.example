@@ -1,0 +1,11 @@
+# Copy to .dev.vars (gitignored) — never commit real values
+BOT_TOKEN=xxxxx
+WEBHOOK_SECRET=xxxxx
+
+# Full deployed webhook URL — MUST include /webhook path
+# Set after npm run deploy; used by production integration tests and setWebhook
+WORKER_WEBHOOK_URL=https://kirana-telechat.<your-subdomain>.workers.dev/webhook
+
+# Your Telegram chat ID (from @userinfobot or bot logs) — used by integration tests
+# for unsupported inbound replies so sendMessage targets a real chat
+TEST_CHAT_ID=8861939587

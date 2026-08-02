@@ -1,0 +1,29 @@
+name = "kirana-telechat"
+main = "src/index.ts"
+compatibility_date = "2024-04-03"
+
+[durable_objects]
+bindings = [
+  { name = "STORE_DO", class_name = "StoreDurableObject" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["StoreDurableObject"]
+
+# Workers Observability — logs and traces are separate features.
+# Logs: console.log + invocation metadata (what we use for transport JSON).
+# Traces: OpenTelemetry request spans (optional; enable separately below).
+# Redeploy after changing this block.
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1

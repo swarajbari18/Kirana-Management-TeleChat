@@ -788,9 +788,9 @@ This component is complete when:
 
 
 
-
-
 # 3. Store Durable Object
+
+
 
 ## Purpose
 
@@ -803,6 +803,8 @@ That Durable Object contains the complete software system required to operate th
 The Durable Object provides a single authoritative execution environment for one business.
 
 ---
+
+
 
 ## Why this architecture was chosen
 
@@ -825,6 +827,8 @@ One execution environment.
 One authoritative business state.
 
 ---
+
+
 
 ## Identity Model
 
@@ -854,6 +858,8 @@ This mapping is deterministic.
 Regardless of when or where the request originates, the same Store Identifier always resolves to the same Durable Object.
 
 ---
+
+
 
 ## Internal Component Composition
 
@@ -887,6 +893,8 @@ Its responsibility is to provide the execution environment in which these compon
 
 ---
 
+
+
 ## State Ownership
 
 The Durable Object owns the lifetime of all application state associated with one store.
@@ -908,6 +916,8 @@ Examples:
 
 ---
 
+
+
 ### Conversation State
 
 Temporary conversational information.
@@ -922,6 +932,8 @@ Examples:
 Conversation state supports reasoning only and is never considered business truth.
 
 ---
+
+
 
 ### Execution State
 
@@ -939,6 +951,8 @@ Execution state exists only to coordinate request execution.
 
 ---
 
+
+
 ## SQLite Architecture
 
 Each Durable Object owns one private SQLite database.
@@ -952,6 +966,8 @@ No component accesses SQLite directly.
 This centralizes transaction management, repository logic and persistence concerns.
 
 ---
+
+
 
 ## Execution Model
 
@@ -998,6 +1014,8 @@ Every request entering the Durable Object shares the same execution environment 
 
 ---
 
+
+
 ## Communication Rules
 
 The Durable Object defines the communication boundary for the application.
@@ -1012,6 +1030,8 @@ Rules:
 - The Durable Object is the only execution boundary for one store.
 
 ---
+
+
 
 ## Failure Model
 
@@ -1034,6 +1054,8 @@ Regardless of failure type:
 
 ---
 
+
+
 ## Observability
 
 The Durable Object represents the primary operational boundary of the application.
@@ -1055,6 +1077,8 @@ Runtime events are emitted by the Durable Object execution environment.
 
 ---
 
+
+
 ## Test Strategy
 
 This component is validated independently of individual business capabilities.
@@ -1074,6 +1098,8 @@ Business correctness is validated within the individual business capabilities.
 
 ---
 
+
+
 ## Acceptance Criteria
 
 The Store Durable Object is complete when:
@@ -1087,6 +1113,8 @@ The Store Durable Object is complete when:
 - The Worker communicates exclusively through the Durable Object boundary.
 
 ---
+
+
 
 ## End-to-End Validation
 
@@ -1105,6 +1133,8 @@ Verify that:
 
 # 4. Execution Manager
 
+
+
 ## Purpose
 
 The Execution Manager is the runtime kernel of the application.
@@ -1120,6 +1150,8 @@ It never performs business reasoning and never implements business rules.
 Its responsibility is to ensure that every execution follows the application's runtime contract.
 
 ---
+
+
 
 ## Why this component exists
 
@@ -1141,6 +1173,8 @@ Rather than requiring every subsystem to implement these concerns independently,
 This keeps runtime concerns independent from business concerns.
 
 ---
+
+
 
 ## Responsibilities
 
@@ -1167,6 +1201,8 @@ The Execution Manager is explicitly **not** responsible for:
 - Accessing business persistence directly.
 
 ---
+
+
 
 ## Internal Architecture
 
@@ -1201,7 +1237,11 @@ Response
 
 ---
 
+
+
 ## Internal Components
+
+
 
 ### Execution Context Builder
 
@@ -1222,6 +1262,8 @@ No business information is stored here.
 
 ---
 
+
+
 ### Execution Lifecycle Controller
 
 Controls the execution from creation until completion.
@@ -1240,6 +1282,8 @@ No other subsystem may modify execution state directly.
 
 ---
 
+
+
 ### Execution State Manager
 
 Maintains temporary runtime state throughout execution.
@@ -1256,6 +1300,8 @@ Execution state exists only while the request is active.
 
 ---
 
+
+
 ### Runtime Event Publisher
 
 Produces structured runtime events describing execution behaviour.
@@ -1263,6 +1309,8 @@ Produces structured runtime events describing execution behaviour.
 These events are consumed by observability systems and never participate in business execution.
 
 ---
+
+
 
 ## Public Interface
 
@@ -1277,6 +1325,8 @@ Execution Result
 The Execution Manager never exposes internal execution structures outside the Store Durable Object.
 
 ---
+
+
 
 ## Internal Workflow
 
@@ -1315,6 +1365,8 @@ Return Execution Result
 
 ---
 
+
+
 ## Dependencies
 
 Depends upon:
@@ -1331,6 +1383,8 @@ The Execution Manager communicates with business capabilities only through the G
 
 ---
 
+
+
 ## Runtime Rules
 
 Every execution must satisfy the following rules.
@@ -1345,7 +1399,11 @@ Every execution must satisfy the following rules.
 
 ---
 
+
+
 ## Failure Cases
+
+
 
 ### Execution Context Creation Failure
 
@@ -1355,6 +1413,8 @@ No downstream component is invoked.
 
 ---
 
+
+
 ### Runtime Initialization Failure
 
 Execution terminates.
@@ -1362,6 +1422,8 @@ Execution terminates.
 A structured runtime failure event is emitted.
 
 ---
+
+
 
 ### Unexpected Component Failure
 
@@ -1373,6 +1435,8 @@ Runtime telemetry is preserved.
 
 ---
 
+
+
 ### Execution Timeout
 
 Execution terminates safely.
@@ -1383,6 +1447,8 @@ No incomplete execution remains active.
 
 ---
 
+
+
 ### Unexpected Runtime Exception
 
 Execution enters failure handling.
@@ -1392,6 +1458,8 @@ Execution context is finalized.
 Runtime events remain available for diagnosis.
 
 ---
+
+
 
 ## Observability
 
@@ -1414,7 +1482,11 @@ Business events are intentionally excluded from this component.
 
 ---
 
+
+
 ## Test Strategy
+
+
 
 ### Unit Tests
 
@@ -1427,6 +1499,8 @@ Business events are intentionally excluded from this component.
 
 ---
 
+
+
 ### Integration Tests
 
 - Worker invokes Execution Manager.
@@ -1436,6 +1510,8 @@ Business events are intentionally excluded from this component.
 - Failures propagate through controlled paths.
 
 ---
+
+
 
 ### Cloud Validation
 
@@ -1453,6 +1529,8 @@ Verify:
 
 ---
 
+
+
 ## Acceptance Criteria
 
 The Execution Manager is complete when:
@@ -1466,6 +1544,8 @@ The Execution Manager is complete when:
 - Execution state never leaks between requests.
 
 ---
+
+
 
 ## End-to-End Validation
 
@@ -1481,11 +1561,9 @@ Successful validation demonstrates that:
 
 Completion of these scenarios verifies that the application kernel provides a reliable execution environment for all higher-level components.
 
-
-
-
-
 # 5. Conversation Manager
+
+
 
 ## Purpose
 
@@ -1498,6 +1576,8 @@ The Conversation Manager exists solely to support conversational reasoning.
 It is not responsible for business memory, business correctness or business persistence.
 
 ---
+
+
 
 ## Why this component exists
 
@@ -1518,6 +1598,8 @@ Only the conversation as a whole represents the owner's intention.
 The Conversation Manager reconstructs that conversational context so the Global Orchestrator receives a complete and coherent view of the current interaction.
 
 ---
+
+
 
 ## Responsibilities
 
@@ -1544,6 +1626,8 @@ The Conversation Manager is explicitly **not** responsible for:
 - Business rule validation.
 
 ---
+
+
 
 ## Internal Architecture
 
@@ -1578,7 +1662,11 @@ Global Orchestrator
 
 ---
 
+
+
 ## Internal Components
+
+
 
 ### Conversation Context Builder
 
@@ -1596,6 +1684,8 @@ into one coherent execution context.
 
 ---
 
+
+
 ### Reference Resolver
 
 Resolves conversational references.
@@ -1611,6 +1701,8 @@ Examples include:
 The resolver converts these references into explicit business references before orchestration begins.
 
 ---
+
+
 
 ### Clarification Manager
 
@@ -1633,6 +1725,8 @@ When the owner replies, the clarification is resumed instead of starting a new w
 
 ---
 
+
+
 ### Conversation State Manager
 
 Maintains temporary conversation information.
@@ -1649,6 +1743,8 @@ Conversation state is temporary and exists only to support ongoing dialogue.
 
 ---
 
+
+
 ### Conversation Cleanup
 
 Removes expired conversational information.
@@ -1658,6 +1754,8 @@ Conversation state should not accumulate indefinitely.
 Inactive conversations should be safely discarded without affecting business state.
 
 ---
+
+
 
 ## Public Interface
 
@@ -1672,6 +1770,8 @@ Conversation Context
 The Conversation Context contains sufficient information for the Global Orchestrator to understand the owner's current intent.
 
 ---
+
+
 
 ## Internal Workflow
 
@@ -1702,6 +1802,8 @@ Return Conversation Context
 
 ---
 
+
+
 ## Dependencies
 
 Depends upon:
@@ -1715,6 +1817,8 @@ Used by:
 The Conversation Manager never communicates directly with business capabilities.
 
 ---
+
+
 
 ## Runtime Rules
 
@@ -1730,7 +1834,11 @@ The following rules always apply.
 
 ---
 
+
+
 ## Failure Cases
+
+
 
 ### Missing Conversation
 
@@ -1740,6 +1848,8 @@ No previous conversational assumptions are made.
 
 ---
 
+
+
 ### Invalid Reference
 
 Unable to resolve conversational reference.
@@ -1747,6 +1857,8 @@ Unable to resolve conversational reference.
 Request clarification from the owner.
 
 ---
+
+
 
 ### Expired Clarification
 
@@ -1756,6 +1868,8 @@ Request updated information.
 
 ---
 
+
+
 ### Multiple Possible References
 
 Do not guess.
@@ -1764,6 +1878,8 @@ Initiate clarification.
 
 ---
 
+
+
 ### Corrupted Conversation State
 
 Discard temporary conversation state.
@@ -1771,6 +1887,8 @@ Discard temporary conversation state.
 Reconstruct conversation from available business information where possible.
 
 ---
+
+
 
 ## Observability
 
@@ -1788,7 +1906,11 @@ Business events are intentionally excluded.
 
 ---
 
+
+
 ## Test Strategy
+
+
 
 ### Unit Tests
 
@@ -1800,6 +1922,8 @@ Business events are intentionally excluded.
 
 ---
 
+
+
 ### Integration Tests
 
 - Multi-turn conversations.
@@ -1809,6 +1933,8 @@ Business events are intentionally excluded.
 - Expired conversation recovery.
 
 ---
+
+
 
 ### Cloud Validation
 
@@ -1826,6 +1952,8 @@ Verify that conversational continuity is maintained while business correctness r
 
 ---
 
+
+
 ## Acceptance Criteria
 
 The Conversation Manager is complete when:
@@ -1838,6 +1966,8 @@ The Conversation Manager is complete when:
 - The Global Orchestrator always receives a complete conversation context.
 
 ---
+
+
 
 ## End-to-End Validation
 
@@ -1853,13 +1983,11 @@ Successful validation demonstrates that:
 
 The Conversation Manager is considered complete when conversational continuity is reliable without ever becoming the source of business truth.
 
-
-
-
 # 6. Global Orchestrator
 
-
 > ++**Orchestration is the runtime discovery, planning, coordination and verification of interactions between independent business capabilities in order to satisfy a business objective while preserving deterministic business correctness.**++
+
+
 
 ## 6.1 Purpose
 
@@ -1937,12 +2065,12 @@ Its role within the system is conceptually similar to that of a software archite
 
 Given a business objective, it determines:
 
-* which business capabilities are required,
-* the order in which they should participate,
-* whether clarification is required before execution,
-* whether additional business capabilities become necessary as execution progresses,
-* when the business objective has been fully satisfied,
-* and when sufficient verified evidence exists to produce a grounded response.
+- which business capabilities are required,
+- the order in which they should participate,
+- whether clarification is required before execution,
+- whether additional business capabilities become necessary as execution progresses,
+- when the business objective has been fully satisfied,
+- and when sufficient verified evidence exists to produce a grounded response.
 
 The orchestrator continuously evaluates the evolving execution state and adapts its coordination strategy based on newly verified business facts returned by the participating capabilities.
 
@@ -2084,6 +2212,8 @@ Its responsibilities are defined below.
 
 ---
 
+
+
 ### 1. Business Intent Identification
 
 The first responsibility of the orchestrator is to understand the owner's business intent.
@@ -2102,6 +2232,8 @@ The output of this responsibility is a clear representation of the owner's busin
 
 ---
 
+
+
 ### 2. Business Objective Planning
 
 Once business intent has been identified, the orchestrator decomposes that intent into one or more executable business objectives.
@@ -2116,6 +2248,8 @@ They do not reference tools, databases or internal software components.
 
 ---
 
+
+
 ### 3. Capability Coordination
 
 For each business objective, the orchestrator determines which business capability owns that responsibility.
@@ -2124,16 +2258,18 @@ The orchestrator delegates work at the capability level rather than at the busin
 
 Business capabilities remain responsible for deciding:
 
-* which business operations must execute,
-* execution order,
-* internal validation,
-* business rules,
-* deterministic execution,
-* and verification.
+- which business operations must execute,
+- execution order,
+- internal validation,
+- business rules,
+- deterministic execution,
+- and verification.
 
 The orchestrator coordinates collaboration between capabilities without understanding their internal implementation.
 
 ---
+
+
 
 ### 4. Execution Supervision
 
@@ -2143,14 +2279,16 @@ Rather than assuming execution succeeded, it observes the verified outcomes retu
 
 The orchestrator determines:
 
-* whether the current business objective has been satisfied,
-* whether additional capabilities must participate,
-* whether further reasoning is required,
-* or whether execution can terminate successfully.
+- whether the current business objective has been satisfied,
+- whether additional capabilities must participate,
+- whether further reasoning is required,
+- or whether execution can terminate successfully.
 
 Execution therefore evolves according to verified business evidence rather than predetermined workflows.
 
 ---
+
+
 
 ### 5. Clarification Management
 
@@ -2164,6 +2302,8 @@ Clarification is treated as part of the reasoning process rather than as a busin
 
 ---
 
+
+
 ### 6. Cross-Capability Collaboration
 
 Business capabilities remain intentionally independent.
@@ -2174,14 +2314,16 @@ Whenever multiple business domains must participate in the same request, the orc
 
 It determines:
 
-* participation order,
-* information flow,
-* dependency satisfaction,
-* and overall execution strategy.
+- participation order,
+- information flow,
+- dependency satisfaction,
+- and overall execution strategy.
 
 The orchestrator therefore becomes the only component responsible for collaboration across subsystem boundaries.
 
 ---
+
+
 
 ### 7. Grounded Response Generation
 
@@ -2195,23 +2337,27 @@ Natural language generation is therefore grounded entirely in deterministic busi
 
 ---
 
+
+
 ### 8. Execution Lifecycle Decisions
 
 Throughout execution, the orchestrator continuously evaluates the state of the request.
 
 After every capability completes its work, the orchestrator determines one of the following actions:
 
-* continue execution,
-* delegate to another capability,
-* request clarification,
-* regenerate the response,
-* or terminate execution.
+- continue execution,
+- delegate to another capability,
+- request clarification,
+- regenerate the response,
+- or terminate execution.
 
 This iterative decision-making process forms the application's adaptive control loop.
 
 The next action is always determined from the current verified execution state rather than from a predefined workflow.
 
 ---
+
+
 
 ### 9. Architectural Boundary Preservation
 
@@ -2221,12 +2367,12 @@ It must never assume responsibilities that belong to another subsystem.
 
 Specifically, the orchestrator must never:
 
-* perform business operations,
-* modify business state,
-* enforce business rules,
-* validate business invariants,
-* calculate business correctness,
-* or access persistence directly.
+- perform business operations,
+- modify business state,
+- enforce business rules,
+- validate business invariants,
+- calculate business correctness,
+- or access persistence directly.
 
 By remaining exclusively responsible for coordination and reasoning, the orchestrator preserves clear ownership boundaries across the entire architecture and prevents business logic from accumulating within the application's central reasoning engine.
 
@@ -2237,7 +2383,6 @@ Collectively, these responsibilities define the constitutional boundaries of the
 Every subsequent aspect of the orchestrator's implementation—including planning, delegation, verification, grounding and failure handling—must operate entirely within these responsibilities.
 
 No future enhancement to the system should require expanding the orchestrator beyond these constitutional boundaries.
-
 
 ## 6.4 Internal Architecture
 
@@ -2258,6 +2403,8 @@ Once the language model has completed a reasoning step, deterministic software t
 The system therefore combines adaptive reasoning with deterministic execution instead of allowing the language model to control the entire execution lifecycle.
 
 ---
+
+
 
 ### Internal Architecture
 
@@ -2330,6 +2477,8 @@ The system therefore combines adaptive reasoning with deterministic execution in
 
 ---
 
+
+
 ### Architectural Philosophy
 
 The orchestrator never performs business execution directly.
@@ -2345,6 +2494,8 @@ Decision making is again performed by the language model.
 This architecture intentionally removes repetitive execution logic from the language model while preserving its ability to reason about changing runtime situations.
 
 ---
+
+
 
 ### Planning Mode
 
@@ -2368,6 +2519,8 @@ The output is a structured representation of the owner's business intent.
 
 ---
 
+
+
 #### Objective Planning
 
 Business intent is transformed into one or more executable business objectives.
@@ -2389,6 +2542,8 @@ Business Objectives
 Objectives intentionally remain independent of software implementation.
 
 ---
+
+
 
 #### Capability Planning
 
@@ -2435,6 +2590,8 @@ Planning Mode terminates once a valid execution plan has been produced.
 
 ---
 
+
+
 ### Execution Engine
 
 The Execution Engine is a deterministic software component.
@@ -2464,6 +2621,8 @@ This allows deterministic software to own repetitive execution while allowing th
 
 ---
 
+
+
 ### Decision Mode
 
 Once execution pauses or completes, control returns to the Global Orchestrator.
@@ -2486,11 +2645,15 @@ Continue with the remaining objectives using the existing execution plan.
 
 ---
 
+
+
 ### Re-plan
 
 Modify the execution strategy because newly verified information changes the business situation.
 
 ---
+
+
 
 ### Request Clarification
 
@@ -2505,11 +2668,15 @@ Examples include:
 
 ---
 
+
+
 ### Generate Final Response
 
 Determine that all business objectives have been satisfied and instruct the orchestrator to generate the final grounded response.
 
 ---
+
+
 
 ### Runtime Control Loop
 
@@ -2561,6 +2728,8 @@ The orchestrator continuously adapts its strategy according to verified business
 
 ---
 
+
+
 ### Architectural Rules
 
 The following architectural rules always apply.
@@ -2580,7 +2749,6 @@ The language model is responsible for discovering how independent business capab
 
 Deterministic software is responsible for ensuring that this collaboration executes correctly, safely and verifiably.
 
-
 ## 6.5 Orchestration Constitution
 
 The Global Orchestrator is governed by a fixed constitutional contract.
@@ -2594,6 +2762,8 @@ While the reasoning performed by the language model is inherently dynamic, the p
 Every orchestration cycle must satisfy the following constitutional principles.
 
 ---
+
+
 
 ### Principle 1 — Reason Before Acting
 
@@ -2611,6 +2781,8 @@ Only after this reasoning process completes may execution planning begin.
 
 ---
 
+
+
 ### Principle 2 — Plan Before Execution
 
 The orchestrator must always produce an explicit execution plan before deterministic execution begins.
@@ -2623,6 +2795,8 @@ Once execution begins, deterministic software becomes responsible for carrying o
 
 ---
 
+
+
 ### Principle 3 — Delegate by Capability Ownership
 
 The orchestrator delegates only to Business Capabilities.
@@ -2631,17 +2805,19 @@ It never delegates directly to tools or business operations.
 
 Each capability owns all knowledge relating to its business domain, including:
 
-* business operations,
-* validation,
-* dependency resolution,
-* business rules,
-* invariant preservation,
-* execution verification,
-* verified business facts.
+- business operations,
+- validation,
+- dependency resolution,
+- business rules,
+- invariant preservation,
+- execution verification,
+- verified business facts.
 
 This preserves subsystem ownership and prevents business knowledge from accumulating inside the orchestrator.
 
 ---
+
+
 
 ### Principle 4 — Separate Reasoning from Execution
 
@@ -2663,6 +2839,8 @@ This separation minimizes the amount of responsibility owned by probabilistic so
 
 ---
 
+
+
 ### Principle 5 — Reason Only from Verified Facts
 
 The orchestrator must never reason from assumptions, cached beliefs or previously generated responses.
@@ -2676,6 +2854,8 @@ The orchestrator consumes business truth.
 Verified business facts therefore become the only authoritative evidence available to the reasoning engine.
 
 ---
+
+
 
 ### Principle 6 — Preserve Capability Independence
 
@@ -2693,23 +2873,27 @@ This ensures that each business capability can evolve independently without intr
 
 ---
 
+
+
 ### Principle 7 — Clarify Rather Than Guess
 
 Whenever verified information is insufficient to continue execution safely, the orchestrator must suspend execution and request clarification.
 
 Examples include:
 
-* ambiguous products,
-* multiple matching entities,
-* incomplete payment information,
-* conflicting business information,
-* missing customer identity.
+- ambiguous products,
+- multiple matching entities,
+- incomplete payment information,
+- conflicting business information,
+- missing customer identity.
 
 Execution resumes only after sufficient information has been obtained.
 
 The orchestrator must never compensate for missing business information through probabilistic inference.
 
 ---
+
+
 
 ### Principle 8 — Adapt Continuously
 
@@ -2719,15 +2903,17 @@ After every deterministic execution phase, the orchestrator evaluates the update
 
 It then determines whether:
 
-* the existing plan remains valid,
-* additional objectives have emerged,
-* replanning is required,
-* clarification is necessary,
-* or the business request has been completed.
+- the existing plan remains valid,
+- additional objectives have emerged,
+- replanning is required,
+- clarification is necessary,
+- or the business request has been completed.
 
 The orchestrator therefore behaves as an adaptive planner rather than a static workflow engine.
 
 ---
+
+
 
 ### Principle 9 — Generate Responses Only After Execution
 
@@ -2741,16 +2927,18 @@ This prevents conversational reasoning from influencing business correctness.
 
 ---
 
+
+
 ### Principle 10 — Ground Every Response
 
 Every factual statement returned to the owner must be traceable to verified business facts produced during deterministic execution.
 
 The orchestrator is prohibited from:
 
-* inventing business facts,
-* extending verified facts,
-* generalizing beyond verified evidence,
-* substituting model knowledge for business state.
+- inventing business facts,
+- extending verified facts,
+- generalizing beyond verified evidence,
+- substituting model knowledge for business state.
 
 If sufficient evidence does not exist, the orchestrator must either request clarification or explicitly communicate that the requested information cannot be established.
 
@@ -2758,21 +2946,25 @@ Grounding is therefore treated as a constitutional requirement rather than a pro
 
 ---
 
+
+
 ### Principle 11 — Terminate Only on Stable States
 
 Every orchestration cycle must terminate in exactly one stable outcome.
 
 The valid terminal states are:
 
-* Business request successfully completed.
-* Waiting for user clarification.
-* Business request safely refused.
-* Recoverable system failure communicated.
-* Non-recoverable system failure communicated.
+- Business request successfully completed.
+- Waiting for user clarification.
+- Business request safely refused.
+- Recoverable system failure communicated.
+- Non-recoverable system failure communicated.
 
 The orchestrator must never terminate while execution remains in an indeterminate state.
 
 ---
+
+
 
 ### Constitutional Summary
 
@@ -2783,7 +2975,6 @@ The constitution establishes one fundamental architectural principle:
 The orchestrator exists to coordinate independent business capabilities, not to replace them.
 
 Every reasoning cycle therefore begins with business intent, proceeds through capability collaboration, depends upon verified business facts and concludes only with a grounded response whose factual claims are fully supported by deterministic business execution.
-
 
 ## 6.6 Complete Orchestration Control Loop
 
@@ -2798,6 +2989,8 @@ The orchestrator therefore does not execute a fixed workflow.
 It continuously reasons over verified business facts until the owner's business intent has either been satisfied or a stable terminal state has been reached.
 
 ---
+
+
 
 ### Complete Control Loop
 
@@ -2876,7 +3069,11 @@ It continuously reasons over verified business facts until the owner's business 
 
 ---
 
+
+
 ## Loop Stages
+
+
 
 ### Stage 1 — Context Construction
 
@@ -2884,17 +3081,19 @@ The orchestrator begins by constructing the complete execution context.
 
 This combines:
 
-* execution context,
-* conversation context,
-* active clarification state,
-* previously verified business facts,
-* active business objectives.
+- execution context,
+- conversation context,
+- active clarification state,
+- previously verified business facts,
+- active business objectives.
 
 The orchestrator never reasons from the user's message in isolation.
 
 Every reasoning cycle begins from the complete current state of the business interaction.
 
 ---
+
+
 
 ### Stage 2 — Business Intent Identification
 
@@ -2908,6 +3107,8 @@ The output is a structured description of what the owner is attempting to accomp
 
 ---
 
+
+
 ### Stage 3 — Business Objective Planning
 
 The identified business intent is transformed into one or more executable business objectives.
@@ -2916,14 +3117,16 @@ Objectives describe business outcomes rather than implementation details.
 
 Objectives may be:
 
-* newly created,
-* resumed from a previous interaction,
-* modified according to newly discovered information,
-* or marked as already satisfied.
+- newly created,
+- resumed from a previous interaction,
+- modified according to newly discovered information,
+- or marked as already satisfied.
 
 The orchestrator reasons about desired outcomes rather than software implementation.
 
 ---
+
+
 
 ### Stage 4 — Execution Planning
 
@@ -2941,16 +3144,18 @@ An explicit execution plan is produced.
 
 The execution plan identifies:
 
-* participating business capabilities,
-* execution sequence,
-* capability dependencies,
-* objective ownership.
+- participating business capabilities,
+- execution sequence,
+- capability dependencies,
+- objective ownership.
 
 The execution plan deliberately avoids business operations and tool selection.
 
 Those responsibilities belong exclusively to the participating business capabilities.
 
 ---
+
+
 
 ### Stage 5 — Deterministic Execution
 
@@ -3035,16 +3240,18 @@ That symmetry is elegant because it means later we can define a common agent/run
 
 ---
 
+
+
 ### Stage 6 — Business Verification
 
 Once the capability determines that its assigned objective has been satisfied, it performs deterministic verification before returning control to the Global Orchestrator before returning control.
 
 Verification includes:
 
-* precondition validation,
-* business rule enforcement,
-* invariant preservation,
-* postcondition verification.
+- precondition validation,
+- business rule enforcement,
+- invariant preservation,
+- postcondition verification.
 
 The output is never a simple success indicator.
 
@@ -3054,24 +3261,28 @@ These verified facts become the only authoritative evidence available to the orc
 
 ---
 
+
+
 ### Stage 7 — Situation Evaluation
 
 Control returns to the orchestrator.
 
 The orchestrator evaluates:
 
-* original business intent,
-* remaining business objectives,
-* verified business facts,
-* blocked objectives,
-* execution failures,
-* clarification requirements.
+- original business intent,
+- remaining business objectives,
+- verified business facts,
+- blocked objectives,
+- execution failures,
+- clarification requirements.
 
 Importantly, the orchestrator reasons only over verified evidence.
 
 No assumptions are introduced during evaluation.
 
 ---
+
+
 
 ### Stage 8 — Runtime Decision
 
@@ -3085,6 +3296,8 @@ Remaining objectives continue.
 
 ---
 
+
+
 #### Re-plan
 
 Previously verified business facts have changed the situation.
@@ -3092,6 +3305,8 @@ Previously verified business facts have changed the situation.
 The execution strategy must be updated.
 
 ---
+
+
 
 #### Request Clarification
 
@@ -3101,6 +3316,8 @@ Execution pauses until the owner responds.
 
 ---
 
+
+
 #### Generate Response
 
 All executable business objectives have been satisfied.
@@ -3108,6 +3325,8 @@ All executable business objectives have been satisfied.
 Execution terminates and response generation begins.
 
 ---
+
+
 
 ### Stage 9 — Faithfulness Verification
 
@@ -3123,6 +3342,8 @@ Business execution is never repeated solely because response generation failed.
 
 ---
 
+
+
 ### Stage 10 — Response Delivery
 
 Only after successful faithfulness verification is the grounded response returned to the owner.
@@ -3130,6 +3351,8 @@ Only after successful faithfulness verification is the grounded response returne
 The owner therefore interacts exclusively with verified business truth rather than probabilistic model output.
 
 ---
+
+
 
 ## Architectural Properties
 
@@ -3143,6 +3366,8 @@ No fixed workflow is required.
 
 ---
 
+
+
 ### Deterministic Business Correctness
 
 All business state changes occur inside deterministic business capabilities.
@@ -3150,6 +3375,8 @@ All business state changes occur inside deterministic business capabilities.
 The language model never modifies business state directly.
 
 ---
+
+
 
 ### Continuous Replanning
 
@@ -3159,11 +3386,15 @@ Verified business facts continuously influence future reasoning.
 
 ---
 
+
+
 ### Evidence-Based Reasoning
 
 Every reasoning cycle begins from verified business facts rather than assumptions or previous model outputs.
 
 ---
+
+
 
 ### Strict Separation of Responsibilities
 
@@ -3177,17 +3408,19 @@ Business correctness therefore does not depend upon language model behaviour.
 
 ---
 
+
+
 ## Control Loop Termination
 
 The orchestration loop terminates only when one stable outcome has been reached.
 
 The valid terminal outcomes are:
 
-* The business request has been successfully completed.
-* Additional user clarification is required.
-* The request has been safely refused according to business rules.
-* A recoverable system failure has been communicated.
-* A non-recoverable system failure has been communicated.
+- The business request has been successfully completed.
+- Additional user clarification is required.
+- The request has been safely refused according to business rules.
+- A recoverable system failure has been communicated.
+- A non-recoverable system failure has been communicated.
 
 No orchestration cycle may terminate while business objectives remain in an indeterminate state.
 
@@ -3205,36 +3438,40 @@ This ownership model is one of the fundamental architectural principles of the s
 
 ---
 
+
+
 ### Delegation Boundary
 
 The Global Orchestrator and the Business Capabilities own different responsibilities.
 
 The Global Orchestrator owns:
 
-* understanding business intent,
-* planning business objectives,
-* selecting the owning Business Capability,
-* coordinating collaboration,
-* supervising overall execution.
+- understanding business intent,
+- planning business objectives,
+- selecting the owning Business Capability,
+- coordinating collaboration,
+- supervising overall execution.
 
 A Business Capability owns:
 
-* understanding its assigned business objective,
-* internal planning,
-* business operation selection,
-* tool orchestration,
-* dependency resolution,
-* business rule enforcement,
-* invariant preservation,
-* deterministic execution,
-* execution verification,
-* production of verified business facts.
+- understanding its assigned business objective,
+- internal planning,
+- business operation selection,
+- tool orchestration,
+- dependency resolution,
+- business rule enforcement,
+- invariant preservation,
+- deterministic execution,
+- execution verification,
+- production of verified business facts.
 
 The orchestrator deliberately stops reasoning at the capability boundary.
 
 Everything beyond that boundary belongs exclusively to the Business Capability.
 
 ---
+
+
 
 ### Delegation Contract
 
@@ -3264,25 +3501,29 @@ The capability therefore owns both the implementation strategy and the correctne
 
 ---
 
+
+
 ### Internal Capability Orchestration
 
 Each Business Capability behaves as an independent domain-specific orchestrator.
 
 After receiving a business objective, the capability determines:
 
-* which business operations are required,
-* which tools should be invoked,
-* execution order,
-* dependency satisfaction,
-* validation strategy,
-* verification strategy,
-* completion criteria.
+- which business operations are required,
+- which tools should be invoked,
+- execution order,
+- dependency satisfaction,
+- validation strategy,
+- verification strategy,
+- completion criteria.
 
 These decisions remain completely encapsulated inside the capability.
 
 The Global Orchestrator neither knows nor controls the capability's internal execution process.
 
 ---
+
+
 
 ### Tool Ownership
 
@@ -3292,14 +3533,16 @@ They are never exposed directly to the Global Orchestrator.
 
 This provides several architectural advantages:
 
-* Business rules remain localized.
-* Tool evolution does not affect orchestration.
-* New tools may be added without modifying the Global Orchestrator.
-* Capability internals remain independently testable.
+- Business rules remain localized.
+- Tool evolution does not affect orchestration.
+- New tools may be added without modifying the Global Orchestrator.
+- Capability internals remain independently testable.
 
 The orchestrator therefore reasons entirely in terms of business domains rather than software implementation.
 
 ---
+
+
 
 ### Recursive Orchestration
 
@@ -3337,38 +3580,42 @@ Verified Business Facts
 
 Every orchestration layer follows the same architectural philosophy:
 
-* reason,
-* delegate,
-* execute deterministically,
-* verify,
-* return evidence.
+- reason,
+- delegate,
+- execute deterministically,
+- verify,
+- return evidence.
 
 Only the scope of responsibility changes.
 
 ---
 
+
+
 ### Capability Completion
 
 A capability completes its work only when one of the following outcomes has been reached.
 
-* The assigned business objective has been successfully achieved.
-* Additional user information is required.
-* Execution cannot continue because of a business rule.
-* Execution cannot continue because of a system failure.
+- The assigned business objective has been successfully achieved.
+- Additional user information is required.
+- Execution cannot continue because of a business rule.
+- Execution cannot continue because of a system failure.
 
 A capability never returns a simple success or failure indicator.
 
 Instead, it returns a structured execution result containing:
 
-* objective status,
-* verified business facts,
-* unresolved objectives,
-* clarification requirements,
-* execution diagnostics.
+- objective status,
+- verified business facts,
+- unresolved objectives,
+- clarification requirements,
+- execution diagnostics.
 
 This execution result becomes the input for the next reasoning cycle performed by the Global Orchestrator.
 
 ---
+
+
 
 ### Architectural Principle
 
@@ -3396,6 +3643,8 @@ This ensures that subsystem independence is preserved regardless of how many bus
 
 ---
 
+
+
 ### Architectural Principle
 
 Every Business Capability owns exactly one business domain.
@@ -3417,6 +3666,8 @@ Every capability behaves as an independent domain expert.
 The Global Orchestrator becomes the only component responsible for coordinating those experts.
 
 ---
+
+
 
 ### Collaboration Model
 
@@ -3474,6 +3725,8 @@ Only verified business facts flow between them through the Global Orchestrator.
 
 ---
 
+
+
 ### Collaboration Through Business Facts
 
 Business Capabilities never exchange commands.
@@ -3499,6 +3752,8 @@ This preserves strict encapsulation.
 
 ---
 
+
+
 ### Dynamic Runtime Collaboration
 
 The collaboration pattern is never predetermined.
@@ -3517,6 +3772,8 @@ The orchestrator therefore behaves as an adaptive collaboration engine rather th
 
 ---
 
+
+
 ### Capability Independence
 
 Every Business Capability must satisfy the following architectural constraints.
@@ -3534,6 +3791,8 @@ The capability remains responsible only for the business domain it owns.
 All cross-domain coordination remains the responsibility of the Global Orchestrator.
 
 ---
+
+
 
 ### Recursive Collaboration
 
@@ -3576,6 +3835,8 @@ The orchestration philosophy remains identical throughout the system.
 
 ---
 
+
+
 ### Collaboration Patterns
 
 The architecture supports several collaboration patterns.
@@ -3598,6 +3859,8 @@ Analytics
 
 ---
 
+
+
 #### Independent Collaboration
 
 Multiple capabilities execute independently because no dependency exists between their objectives.
@@ -3605,6 +3868,8 @@ Multiple capabilities execute independently because no dependency exists between
 The Execution Engine may execute them in any deterministic order.
 
 ---
+
+
 
 #### Conditional Collaboration
 
@@ -3618,6 +3883,8 @@ The orchestrator introduces the Khata Capability into the execution plan.
 
 ---
 
+
+
 #### Iterative Collaboration
 
 Previously verified business facts require the orchestrator to revisit a capability later in execution.
@@ -3629,6 +3896,8 @@ The owner modifies a draft bill after inventory has already been queried.
 The orchestrator delegates back to Billing to update the draft before continuing.
 
 ---
+
+
 
 ### Collaboration Completion
 
@@ -3644,6 +3913,8 @@ Only after all objectives reach stable states may the orchestrator proceed to re
 
 ---
 
+
+
 ### Architectural Principle
 
 The application is intentionally designed as a collaboration of independent business experts rather than one intelligent monolithic agent.
@@ -3651,7 +3922,6 @@ The application is intentionally designed as a collaboration of independent busi
 The Global Orchestrator never replaces those experts.
 
 Instead, it continuously discovers how they should collaborate to satisfy the owner's business intent while preserving subsystem independence, deterministic business correctness and architectural scalability.
-
 
 ## 6.9 Clarification Strategy
 
@@ -3669,6 +3939,8 @@ Execution pauses until sufficient information has been obtained.
 
 ---
 
+
+
 ### Architectural Principle
 
 The orchestrator is responsible for deciding **whether clarification is required**.
@@ -3682,6 +3954,8 @@ The orchestrator understands the overall execution.
 The capability understands its own business domain.
 
 ---
+
+
 
 ### Clarification Ownership
 
@@ -3714,6 +3988,8 @@ Execution planning cannot begin.
 Clarification is therefore required before delegation.
 
 ---
+
+
 
 #### Capability-Level Clarification
 
@@ -3766,6 +4042,8 @@ The Global Orchestrator remains responsible for all user communication.
 
 ---
 
+
+
 ### Clarification Flow
 
 ```text
@@ -3812,6 +4090,8 @@ The clarification becomes part of the ongoing execution rather than beginning a 
 
 ---
 
+
+
 ### Structured Clarification Contract
 
 Every clarification request returned by a Business Capability contains:
@@ -3826,6 +4106,8 @@ Every clarification request returned by a Business Capability contains:
 This allows the Global Orchestrator to resume execution deterministically once the owner's response has been received.
 
 ---
+
+
 
 ### Clarification Context
 
@@ -3845,6 +4127,8 @@ The clarification therefore becomes part of the same execution lifecycle.
 
 ---
 
+
+
 ### Clarification Rules
 
 The following constitutional rules always apply.
@@ -3858,6 +4142,8 @@ The following constitutional rules always apply.
 
 ---
 
+
+
 ### Clarification Completion
 
 A clarification completes when one of the following outcomes occurs.
@@ -3870,6 +4156,8 @@ Execution resumes from the suspended objective.
 
 ---
 
+
+
 #### Clarification Cancelled
 
 The owner explicitly cancels the request.
@@ -3877,6 +4165,8 @@ The owner explicitly cancels the request.
 The associated business objective is terminated safely.
 
 ---
+
+
 
 #### Clarification Becomes Invalid
 
@@ -3888,6 +4178,8 @@ The orchestrator replans using the latest business intent.
 
 ---
 
+
+
 ### Architectural Principle
 
 Clarification is not a conversational feature.
@@ -3897,7 +4189,6 @@ It is an execution mechanism.
 Its purpose is to preserve business correctness by preventing the system from replacing missing business information with probabilistic assumptions.
 
 Whenever sufficient evidence does not exist to continue safely, execution pauses, clarification is obtained and the orchestration loop resumes only after the required information has been verified.
-
 
 ## 6.10 Verification Architecture
 
@@ -3915,6 +4206,8 @@ Only when all verification stages succeed is the execution considered complete.
 
 ---
 
+
+
 ## Verification Philosophy
 
 The application distinguishes between three independent questions.
@@ -3931,6 +4224,8 @@ Correctness emerges from the combination of all three.
 
 ---
 
+
+
 # Layer 1 — Plan Verification
 
 Plan Verification occurs immediately after the Global Orchestrator produces an execution plan and before deterministic execution begins.
@@ -3943,24 +4238,28 @@ The language model never verifies its own plan.
 
 ---
 
+
+
 ### Responsibilities
 
 Plan Verification confirms:
 
-* every business objective has an owning Business Capability,
-* every required capability exists,
-* execution dependencies are satisfied,
-* objective ordering is valid,
-* required execution inputs are available,
-* no objective is duplicated,
-* no objective is unreachable,
-* execution can begin safely.
+- every business objective has an owning Business Capability,
+- every required capability exists,
+- execution dependencies are satisfied,
+- objective ordering is valid,
+- required execution inputs are available,
+- no objective is duplicated,
+- no objective is unreachable,
+- execution can begin safely.
 
 If any verification fails, execution never begins.
 
 Control returns to the Global Orchestrator for replanning.
 
 ---
+
+
 
 ### Output
 
@@ -3977,6 +4276,8 @@ Execution is rejected together with structured diagnostics explaining why the pl
 The Global Orchestrator reasons again using these diagnostics.
 
 ---
+
+
 
 # Layer 2 — Business Verification
 
@@ -4020,18 +4321,22 @@ Instead it returns structured evidence describing what was verified.
 
 ---
 
+
+
 ### Preconditions
 
 Execution begins only after verifying:
 
-* required entities exist,
-* required business information is available,
-* dependencies have been satisfied,
-* execution is permitted by business rules.
+- required entities exist,
+- required business information is available,
+- dependencies have been satisfied,
+- execution is permitted by business rules.
 
 If any precondition fails, execution stops immediately.
 
 ---
+
+
 
 ### Business Operation Verification
 
@@ -4043,27 +4348,29 @@ Examples include:
 
 Inventory
 
-* inventory before,
-* quantity received,
-* inventory after.
+- inventory before,
+- quantity received,
+- inventory after.
 
 Billing
 
-* draft exists,
-* inventory deducted,
-* totals calculated,
-* GST computed,
-* bill persisted.
+- draft exists,
+- inventory deducted,
+- totals calculated,
+- GST computed,
+- bill persisted.
 
 Khata
 
-* previous balance,
-* payment applied,
-* updated balance verified.
+- previous balance,
+- payment applied,
+- updated balance verified.
 
 Every capability defines verification appropriate to its own business domain.
 
 ---
+
+
 
 ### Verified Business Facts
 
@@ -4073,17 +4380,19 @@ These facts become the authoritative evidence used by the remainder of the orche
 
 Verified business facts include:
 
-* objective status,
-* verified business state,
-* relevant business measurements,
-* clarification requirements,
-* execution diagnostics.
+- objective status,
+- verified business state,
+- relevant business measurements,
+- clarification requirements,
+- execution diagnostics.
 
 Business Capabilities never expose internal execution details.
 
 Only verified business evidence leaves the capability boundary.
 
 ---
+
+
 
 # Layer 3 — Faithfulness Verification
 
@@ -4094,6 +4403,8 @@ Its purpose is to ensure that the natural language response contains only inform
 Unlike Business Verification, this layer validates language rather than business state.
 
 ---
+
+
 
 ### Verification Strategy
 
@@ -4107,6 +4418,8 @@ Unsupported claims are rejected.
 
 ---
 
+
+
 ### Failure Modes
 
 The Faithfulness Verifier specifically detects:
@@ -4117,6 +4430,8 @@ Information not present within verified business facts.
 
 ---
 
+
+
 #### Incorrect Attribute Association
 
 Correct values associated with incorrect business entities.
@@ -4125,8 +4440,8 @@ Example:
 
 Verified Facts
 
-* Maggi = 5
-* Coffee = 26
+- Maggi = 5
+- Coffee = 26
 
 Response
 
@@ -4137,6 +4452,8 @@ Verification Result
 Rejected.
 
 ---
+
+
 
 #### Hallucinated Generalisation
 
@@ -4158,6 +4475,8 @@ Rejected.
 
 ---
 
+
+
 #### Unsupported Inference
 
 Reasonable but unverified conclusions.
@@ -4166,20 +4485,24 @@ Only deterministic evidence may appear in the final response.
 
 ---
 
+
+
 ### Faithfulness Failure Handling
 
 If faithfulness verification fails:
 
-* business execution is **not** repeated,
-* verified business facts remain unchanged,
-* the response is regenerated,
-* verification is performed again.
+- business execution is **not** repeated,
+- verified business facts remain unchanged,
+- the response is regenerated,
+- verification is performed again.
 
 Only response generation is retried.
 
 Business execution remains deterministic.
 
 ---
+
+
 
 # Verification Flow
 
@@ -4225,20 +4548,24 @@ Skipping any layer violates the architectural constitution.
 
 ---
 
+
+
 # Architectural Principles
 
 The Verification Architecture is governed by the following principles.
 
-* The language model never verifies its own execution.
-* Every verification stage is deterministic.
-* Verification always operates on evidence rather than assumptions.
-* Business truth is established only through Business Verification.
-* Natural language is validated independently through Faithfulness Verification.
-* Failed verification never silently proceeds.
-* Verification failures always produce structured diagnostics.
-* Every response delivered to the owner is fully grounded in verified business facts.
+- The language model never verifies its own execution.
+- Every verification stage is deterministic.
+- Verification always operates on evidence rather than assumptions.
+- Business truth is established only through Business Verification.
+- Natural language is validated independently through Faithfulness Verification.
+- Failed verification never silently proceeds.
+- Verification failures always produce structured diagnostics.
+- Every response delivered to the owner is fully grounded in verified business facts.
 
 ---
+
+
 
 ## Architectural Summary
 
@@ -4256,7 +4583,6 @@ Instead, it asks three deterministic questions:
 
 Only when all three questions have been answered affirmatively is the execution considered complete.
 
-
 ## 6.11 Failure Handling Strategy
 
 Failure is treated as a normal execution outcome rather than an exceptional condition.
@@ -4268,6 +4594,8 @@ The objective is to ensure that every failure preserves deterministic business c
 Business correctness always takes priority over successful execution.
 
 ---
+
+
 
 ## Architectural Philosophy
 
@@ -4282,6 +4610,8 @@ Failures are never hidden from the orchestration loop.
 Instead, failures become structured execution results that the Global Orchestrator reasons about in exactly the same way as successful execution.
 
 ---
+
+
 
 ## Failure Classification
 
@@ -4313,6 +4643,8 @@ The orchestrator either:
 Business state remains unchanged.
 
 ---
+
+
 
 ### Business Failure
 
@@ -4346,6 +4678,8 @@ Business correctness remains preserved.
 
 ---
 
+
+
 ### Infrastructure Failure
 
 Occurs outside business execution.
@@ -4364,11 +4698,13 @@ Execution immediately transitions into a system failure state.
 
 Business Capabilities never attempt to compensate for infrastructure failures.
 
-The failure is propagated to the Global Orchestrator together with structured runtime diagnostics.
+The failure is propagated to the Execution Engine (not global orchestrator) together with structured runtime diagnostics.
 
-The orchestrator determines whether the failure is recoverable.
+The execution engine determines whether the failure is recoverable.
 
 ---
+
+
 
 ### Verification Failure
 
@@ -4398,6 +4734,8 @@ Business execution is never repeated solely because language generation failed.
 
 ---
 
+
+
 ### Unexpected Runtime Failure
 
 Represents any failure that violates the expected execution path.
@@ -4420,6 +4758,8 @@ Preserve all verified business state.
 Reject all unverified execution results.
 
 ---
+
+
 
 ## Failure Propagation
 
@@ -4451,6 +4791,8 @@ This preserves a consistent conversational experience while maintaining architec
 
 ---
 
+
+
 ## Business State Protection
 
 The most important responsibility of the failure strategy is protecting business truth.
@@ -4466,6 +4808,8 @@ The following guarantees always apply.
 Business correctness therefore remains independent of execution success.
 
 ---
+
+
 
 ## Recoverable Failures
 
@@ -4483,6 +4827,8 @@ The orchestration loop remains active.
 Execution resumes once the recovery condition has been satisfied.
 
 ---
+
+
 
 ## Non-Recoverable Failures
 
@@ -4503,6 +4849,8 @@ Business state remains unchanged.
 
 ---
 
+
+
 ## Failure Diagnostics
 
 Every failure produces structured diagnostics.
@@ -4522,6 +4870,8 @@ These diagnostics become part of the execution history and support both runtime 
 
 ---
 
+
+
 ## Failure Handling Principles
 
 The architecture follows the following principles.
@@ -4536,6 +4886,8 @@ The architecture follows the following principles.
 - Business correctness always has higher priority than successful completion.
 
 ---
+
+
 
 ## Architectural Summary
 
@@ -4565,6 +4917,8 @@ Violating any runtime rule constitutes an architectural defect rather than an im
 
 ---
 
+
+
 ## Rule 1 — Every Execution Begins With Reasoning
 
 No business capability may execute until the owner's business intent has been understood and transformed into executable business objectives.
@@ -4572,6 +4926,8 @@ No business capability may execute until the owner's business intent has been un
 Natural language must never directly trigger deterministic execution.
 
 ---
+
+
 
 ## Rule 2 — Every Objective Has Exactly One Owner
 
@@ -4584,6 +4940,8 @@ Business Capabilities may collaborate through the Global Orchestrator but never 
 This preserves clear responsibility boundaries throughout the application.
 
 ---
+
+
 
 ## Rule 3 — Business Capabilities Are Autonomous
 
@@ -4600,6 +4958,8 @@ Every capability remains responsible only for the business domain it owns.
 
 ---
 
+
+
 ## Rule 4 — Deterministic Execution Is Mandatory
 
 Once the Global Orchestrator has produced an execution plan, deterministic software becomes responsible for execution.
@@ -4610,6 +4970,8 @@ Business correctness must never depend upon probabilistic behaviour.
 
 ---
 
+
+
 ## Rule 5 — Every Business Operation Is Verified
 
 No business operation is considered complete until deterministic verification has confirmed that the intended business objective has been achieved.
@@ -4619,6 +4981,8 @@ Verification establishes business truth.
 Execution alone does not.
 
 ---
+
+
 
 ## Rule 6 — Verified Business Facts Become The Only Source Of Truth
 
@@ -4635,6 +4999,8 @@ Verified business facts become the sole authoritative evidence available to the 
 
 ---
 
+
+
 ## Rule 7 — Every Response Must Be Grounded
 
 Every factual statement communicated to the owner must be directly supported by verified business facts.
@@ -4645,6 +5011,8 @@ Grounding is a runtime requirement rather than a prompt engineering technique.
 
 ---
 
+
+
 ## Rule 8 — Clarification Takes Priority Over Assumption
 
 Whenever sufficient information does not exist to safely continue execution, the orchestrator must suspend execution and request clarification.
@@ -4652,6 +5020,8 @@ Whenever sufficient information does not exist to safely continue execution, the
 Execution must never continue by replacing missing business information with probabilistic inference.
 
 ---
+
+
 
 ## Rule 9 — Execution Is Observable
 
@@ -4668,6 +5038,8 @@ The complete execution lifecycle must remain observable after execution has fini
 
 ---
 
+
+
 ## Rule 10 — Stable Termination Is Mandatory
 
 Every orchestration cycle must terminate in exactly one stable terminal state.
@@ -4683,6 +5055,8 @@ Valid terminal states include:
 The orchestration loop must never terminate while execution remains indeterminate.
 
 ---
+
+
 
 ## Rule 11 — Architectural Boundaries Are Never Violated
 
@@ -4704,6 +5078,8 @@ Each subsystem must remain within its defined responsibility boundary.
 
 ---
 
+
+
 ## Rule 12 — Deterministic Software Always Owns Business Correctness
 
 Adaptive reasoning determines **what should happen**.
@@ -4716,6 +5092,8 @@ This rule represents the fundamental architectural principle governing the entir
 
 ---
 
+
+
 ## Architectural Summary
 
 Collectively, these runtime rules define the execution contract of the Global Orchestrator.
@@ -4723,7 +5101,6 @@ Collectively, these runtime rules define the execution contract of the Global Or
 Every reasoning cycle, execution plan, business capability, verification step and response generated by the system must satisfy these rules.
 
 They provide a stable constitutional foundation upon which every future capability, feature and architectural extension can be implemented without compromising the integrity of the overall system.
-
 
 ## 6.13 Observability
 
@@ -4749,6 +5126,8 @@ The objective of observability is therefore explainability rather than logging.
 
 ---
 
+
+
 ## Observability Philosophy
 
 The application is architecturally divided into deterministic execution and adaptive reasoning.
@@ -4772,6 +5151,8 @@ Together these form the complete execution history.
 
 ---
 
+
+
 ## Observability Layers
 
 The architecture exposes observability at five independent layers.
@@ -4792,6 +5173,8 @@ Includes:
 This layer provides the high-level execution timeline.
 
 ---
+
+
 
 ### Layer 2 — Orchestration Decisions
 
@@ -4817,6 +5200,8 @@ The objective is to reconstruct the orchestrator's reasoning path.
 
 ---
 
+
+
 ### Layer 3 — Capability Execution
 
 Each Business Capability records its own execution history.
@@ -4836,6 +5221,8 @@ Capability observability remains independent from orchestration observability.
 This preserves subsystem ownership.
 
 ---
+
+
 
 ### Layer 4 — Verification
 
@@ -4865,6 +5252,8 @@ Verification therefore becomes fully observable.
 
 ---
 
+
+
 ### Layer 5 — Runtime Infrastructure
 
 Infrastructure events are recorded independently of business execution.
@@ -4882,6 +5271,8 @@ Examples include:
 This layer supports operational diagnostics without polluting business observability.
 
 ---
+
+
 
 ## Correlation Model
 
@@ -4925,6 +5316,8 @@ Using a single Correlation Identifier allows engineers to reconstruct an entire 
 
 ---
 
+
+
 ## Observability Rules
 
 The following architectural rules always apply.
@@ -4938,6 +5331,8 @@ The following architectural rules always apply.
 - No business state changes occur without corresponding observability events.
 
 ---
+
+
 
 ## Production Diagnostics
 
@@ -4956,6 +5351,8 @@ These questions can be answered without reproducing the execution.
 
 ---
 
+
+
 ## Architectural Principle
 
 Observability is treated as a first-class architectural capability rather than an operational afterthought.
@@ -4963,7 +5360,6 @@ Observability is treated as a first-class architectural capability rather than a
 The application is therefore designed so that every business request produces a complete, structured and explainable execution history.
 
 This execution history allows engineers to understand not only **what** the system did, but **why** it did so, making the behaviour of an adaptive AI system as diagnosable as a deterministic software application.
-
 
 ## 6.14 Test Strategy
 
@@ -4977,6 +5373,8 @@ Every significant architectural decision must have corresponding evidence provin
 
 ---
 
+
+
 ## Testing Philosophy
 
 The application is composed of independent software components collaborating through deterministic execution and adaptive reasoning.
@@ -4989,6 +5387,8 @@ Testing therefore validates both:
 No component is considered complete until it has been validated independently and then validated again as part of the complete runtime.
 
 ---
+
+
 
 ## Architectural Validation Pyramid
 
@@ -5014,6 +5414,8 @@ Each stage builds confidence before progressing to the next.
 
 ---
 
+
+
 ## Stage 1 — Architectural Invariant Validation
 
 The first stage validates the architectural principles themselves.
@@ -5028,17 +5430,23 @@ Verify that every business objective is owned by exactly one Business Capability
 
 ---
 
+
+
 ### Capability Independence
 
 Verify that Business Capabilities never invoke one another directly.
 
 ---
 
+
+
 ### Deterministic Execution
 
 Verify that all business state changes occur exclusively through deterministic Business Capabilities.
 
 ---
+
+
 
 ### Verification Gates
 
@@ -5050,11 +5458,15 @@ Verify that execution cannot bypass:
 
 ---
 
+
+
 ### Grounded Responses
 
 Verify that every factual statement returned to the owner is traceable to verified business facts.
 
 ---
+
+
 
 ### Stable Termination
 
@@ -5063,6 +5475,8 @@ Verify that every orchestration cycle reaches exactly one valid terminal state.
 These tests validate the architecture itself rather than individual features.
 
 ---
+
+
 
 ## Stage 2 — Component Validation
 
@@ -5085,6 +5499,8 @@ Validation focuses exclusively on the responsibilities owned by that component.
 
 ---
 
+
+
 ## Stage 3 — Business Capability Validation
 
 Each Business Capability is validated independently as an autonomous business subsystem.
@@ -5104,6 +5520,8 @@ The Global Orchestrator is intentionally excluded from these tests.
 
 ---
 
+
+
 ## Stage 4 — Collaboration Validation
 
 Subsystem interaction is validated after individual components have been proven correct.
@@ -5120,6 +5538,8 @@ Scenarios include:
 The objective is to validate collaboration rather than individual functionality.
 
 ---
+
+
 
 ## Stage 5 — Failure Validation
 
@@ -5156,6 +5576,8 @@ Validation confirms that failures preserve business correctness.
 
 ---
 
+
+
 ## Stage 6 — Production End-to-End Validation
 
 Every completed software component is deployed immediately after implementation.
@@ -5174,6 +5596,8 @@ The objective is continuous architectural validation throughout development rath
 
 ---
 
+
+
 ## Evaluation Scenarios
 
 Representative execution scenarios include:
@@ -5188,6 +5612,8 @@ Successful completion.
 
 ---
 
+
+
 ### Multi-Capability Collaboration
 
 One business request.
@@ -5197,6 +5623,8 @@ Multiple Business Capabilities.
 Dynamic runtime collaboration.
 
 ---
+
+
 
 ### Clarification
 
@@ -5208,6 +5636,8 @@ Execution resumes correctly.
 
 ---
 
+
+
 ### Replanning
 
 Execution produces new verified business facts.
@@ -5217,6 +5647,8 @@ The orchestrator modifies the execution plan.
 Execution continues successfully.
 
 ---
+
+
 
 ### Verification Failure
 
@@ -5228,6 +5660,8 @@ Response regenerates without repeating business execution.
 
 ---
 
+
+
 ### Infrastructure Failure
 
 External dependency becomes unavailable.
@@ -5237,6 +5671,8 @@ Business correctness remains preserved.
 Execution terminates safely.
 
 ---
+
+
 
 ## Success Criteria
 
@@ -5252,6 +5688,8 @@ The architecture is considered validated only when all of the following have bee
 - Every production scenario behaves consistently after deployment.
 
 ---
+
+
 
 ## Architectural Principle
 
@@ -5273,59 +5711,69 @@ Only the observable behaviour of the orchestration runtime is evaluated.
 
 ---
 
+
+
 ## Functional Acceptance
 
 The Global Orchestrator must demonstrate the ability to:
 
-* Understand business intent from natural language.
-* Derive one or more business objectives.
-* Select the appropriate Business Capabilities.
-* Produce a valid execution plan.
-* Delegate objectives without violating ownership boundaries.
-* Coordinate collaboration between multiple Business Capabilities.
-* Re-plan when execution changes the business situation.
-* Request clarification when insufficient business information exists.
-* Generate a grounded natural-language response after successful execution.
+- Understand business intent from natural language.
+- Derive one or more business objectives.
+- Select the appropriate Business Capabilities.
+- Produce a valid execution plan.
+- Delegate objectives without violating ownership boundaries.
+- Coordinate collaboration between multiple Business Capabilities.
+- Re-plan when execution changes the business situation.
+- Request clarification when insufficient business information exists.
+- Generate a grounded natural-language response after successful execution.
 
 ---
+
+
 
 ## Architectural Acceptance
 
 The implementation must demonstrate that:
 
-* Business Capabilities remain completely independent.
-* The Global Orchestrator never performs business operations.
-* Deterministic software owns business execution.
-* Every business objective has exactly one owning Business Capability.
-* Collaboration occurs only through the Global Orchestrator.
-* Business correctness remains independent of language model behaviour.
+- Business Capabilities remain completely independent.
+- The Global Orchestrator never performs business operations.
+- Deterministic software owns business execution.
+- Every business objective has exactly one owning Business Capability.
+- Collaboration occurs only through the Global Orchestrator.
+- Business correctness remains independent of language model behaviour.
 
 ---
+
+
 
 ## Verification Acceptance
 
 The orchestration runtime must demonstrate that:
 
-* Every execution plan passes Plan Verification.
-* Every Business Capability performs Business Verification.
-* Every response passes Faithfulness Verification.
-* Verified Business Facts become the only evidence used during subsequent reasoning.
-* No verification layer can be bypassed.
+- Every execution plan passes Plan Verification.
+- Every Business Capability performs Business Verification.
+- Every response passes Faithfulness Verification.
+- Verified Business Facts become the only evidence used during subsequent reasoning.
+- No verification layer can be bypassed.
 
 ---
+
+
 
 ## Failure Acceptance
 
 The implementation must demonstrate that:
 
-* Planning failures never modify business state.
-* Business failures preserve deterministic business correctness.
-* Infrastructure failures terminate safely.
-* Verification failures prevent incorrect responses.
-* Every failure produces structured diagnostics.
-* Every execution terminates in a valid architectural state.
+- Planning failures never modify business state.
+- Business failures preserve deterministic business correctness.
+- Infrastructure failures terminate safely.
+- Verification failures prevent incorrect responses.
+- Every failure produces structured diagnostics.
+- Every execution terminates in a valid architectural state.
 
 ---
+
+
 
 ## Observability Acceptance
 
@@ -5333,30 +5781,34 @@ The implementation must demonstrate that engineers can reconstruct an entire orc
 
 This includes:
 
-* identified business intent,
-* business objectives,
-* capability delegation,
-* execution progression,
-* verification outcomes,
-* runtime decisions,
-* failure diagnostics,
-* final execution state.
+- identified business intent,
+- business objectives,
+- capability delegation,
+- execution progression,
+- verification outcomes,
+- runtime decisions,
+- failure diagnostics,
+- final execution state.
 
 The orchestration lifecycle must remain completely explainable after execution has completed.
 
 ---
 
+
+
 ## Runtime Acceptance
 
 The implementation must demonstrate that:
 
-* reasoning and deterministic execution remain separated,
-* execution adapts to changing runtime conditions,
-* clarification pauses and later resumes execution correctly,
-* replanning occurs only from verified business facts,
-* responses remain fully grounded.
+- reasoning and deterministic execution remain separated,
+- execution adapts to changing runtime conditions,
+- clarification pauses and later resumes execution correctly,
+- replanning occurs only from verified business facts,
+- responses remain fully grounded.
 
 ---
+
+
 
 ## Production Acceptance
 
@@ -5366,22 +5818,23 @@ Acceptance must be demonstrated using the deployed Telegram bot rather than loca
 
 Production validation must confirm:
 
-* Telegram webhook delivery reaches the Cloudflare Worker.
-* The Worker correctly routes requests into the appropriate Durable Object instance.
-* Execution state persists correctly across requests.
-* Multi-turn conversations continue correctly after independent requests.
-* Orchestration, verification and observability remain functional within the deployed environment.
-* Structured logs and execution traces are visible through Cloudflare observability tooling.
-* Production behaviour matches the architectural guarantees defined in this document.
+- Telegram webhook delivery reaches the Cloudflare Worker.
+- The Worker correctly routes requests into the appropriate Durable Object instance.
+- Execution state persists correctly across requests.
+- Multi-turn conversations continue correctly after independent requests.
+- Orchestration, verification and observability remain functional within the deployed environment.
+- Structured logs and execution traces are visible through Cloudflare observability tooling.
+- Production behaviour matches the architectural guarantees defined in this document.
 
 ---
+
+
 
 ## Acceptance Summary
 
 The Global Orchestrator is accepted only when it demonstrates that adaptive reasoning, deterministic execution, verification, collaboration, failure handling and production deployment collectively satisfy the architectural contract established throughout this document.
 
 Acceptance therefore represents validation of the architecture itself rather than validation of any specific implementation.
-
 
 ## 6.16 End-to-End Validation
 
@@ -5395,6 +5848,8 @@ End-to-End Validation verifies that all components collaborate correctly after d
 
 ---
 
+
+
 ### **⚠️ CRITICAL ENGINEERING PRINCIPLE — PRODUCTION-FIRST DEVELOPMENT**
 
 **This system must be developed for the production environment from the very beginning.**
@@ -5407,12 +5862,12 @@ Instead, every software component must be implemented against its actual product
 
 For this project, the production runtime is:
 
-* Cloudflare Workers
-* Cloudflare Durable Objects
-* Cloudflare SQLite Storage
-* Telegram Bot Webhooks
-* Gemini API
-* Cloudflare production networking and execution model
+- Cloudflare Workers
+- Cloudflare Durable Objects
+- Cloudflare SQLite Storage
+- Telegram Bot Webhooks
+- Gemini API
+- Cloudflare production networking and execution model
 
 Every architectural decision, every software component and every integration must be validated within this production environment as soon as that component is implemented.
 
@@ -5423,6 +5878,8 @@ Local development exists only to accelerate iteration, never to define the archi
 This approach ensures that deployment constraints, runtime behaviour, persistence characteristics, execution limits and infrastructure interactions are continuously validated throughout development rather than being discovered only during final deployment.
 
 ---
+
+
 
 ## Validation Philosophy
 
@@ -5460,6 +5917,8 @@ No component is considered complete until it has been successfully deployed and 
 
 ---
 
+
+
 ## Continuous Production Validation
 
 Development proceeds incrementally.
@@ -5468,14 +5927,16 @@ Each completed software component is immediately deployed and validated before i
 
 This provides continuous confidence that:
 
-* deployment remains healthy,
-* production integrations remain functional,
-* architectural assumptions remain valid,
-* execution behaviour matches the intended design.
+- deployment remains healthy,
+- production integrations remain functional,
+- architectural assumptions remain valid,
+- execution behaviour matches the intended design.
 
 Production validation therefore becomes a continuous engineering activity rather than a final project milestone.
 
 ---
+
+
 
 ## Production Validation Scope
 
@@ -5485,77 +5946,87 @@ Validation includes:
 
 ### Cloudflare Runtime
 
-* Worker deployment succeeds.
-* Durable Objects initialize correctly.
-* Durable Object routing behaves correctly.
-* Persistent SQLite storage behaves as expected.
-* Runtime lifecycle matches architectural assumptions.
+- Worker deployment succeeds.
+- Durable Objects initialize correctly.
+- Durable Object routing behaves correctly.
+- Persistent SQLite storage behaves as expected.
+- Runtime lifecycle matches architectural assumptions.
 
 ---
+
+
 
 ### Telegram Integration
 
 Validate:
 
-* webhook registration,
-* webhook delivery,
-* request authentication,
-* request routing,
-* multi-message conversations,
-* retry behaviour,
-* duplicate update handling.
+- webhook registration,
+- webhook delivery,
+- request authentication,
+- request routing,
+- multi-message conversations,
+- retry behaviour,
+- duplicate update handling.
 
 The production Telegram bot becomes the primary validation interface.
 
 ---
 
+
+
 ### Agent Runtime
 
 Validate:
 
-* orchestration loop,
-* capability delegation,
-* execution engine,
-* verification gates,
-* clarification workflow,
-* replanning behaviour,
-* response generation.
+- orchestration loop,
+- capability delegation,
+- execution engine,
+- verification gates,
+- clarification workflow,
+- replanning behaviour,
+- response generation.
 
 All execution paths must operate correctly within the production runtime.
 
 ---
 
+
+
 ### Persistence
 
 Validate:
 
-* conversation persistence,
-* business persistence,
-* owner preferences,
-* inventory state,
-* khata,
-* draft bills,
-* recovery after Worker restart,
-* recovery after Durable Object activation.
+- conversation persistence,
+- business persistence,
+- owner preferences,
+- inventory state,
+- khata,
+- draft bills,
+- recovery after Worker restart,
+- recovery after Durable Object activation.
 
 Persistent business state must survive independent execution sessions.
 
 ---
 
+
+
 ### Observability
 
 Validate that production telemetry provides complete visibility into:
 
-* orchestration,
-* capability execution,
-* verification,
-* failures,
-* response generation,
-* execution termination.
+- orchestration,
+- capability execution,
+- verification,
+- failures,
+- response generation,
+- execution termination.
 
 Every production execution must be reconstructable from observability data.
 
 ---
+
+
 
 ### Failure Validation
 
@@ -5563,34 +6034,38 @@ Production validation intentionally exercises failure scenarios.
 
 Examples include:
 
-* insufficient inventory,
-* duplicate Telegram delivery,
-* invalid business requests,
-* clarification workflow,
-* failed verification,
-* external service failures,
-* deployment restarts.
+- insufficient inventory,
+- duplicate Telegram delivery,
+- invalid business requests,
+- clarification workflow,
+- failed verification,
+- external service failures,
+- deployment restarts.
 
 The objective is to verify that business correctness is preserved under production failures.
 
 ---
 
+
+
 ## Component Acceptance Checklist
 
 Every software component must satisfy the following checklist before implementation proceeds to the next component.
 
-* Component responsibilities implemented.
-* Component tests passing.
-* Cloudflare deployment successful.
-* Production integration verified.
-* Observability confirmed.
-* Failure scenarios exercised.
-* Architectural invariants preserved.
-* End-to-end production validation successful.
+- Component responsibilities implemented.
+- Component tests passing.
+- Cloudflare deployment successful.
+- Production integration verified.
+- Observability confirmed.
+- Failure scenarios exercised.
+- Architectural invariants preserved.
+- End-to-end production validation successful.
 
 Only then is the component considered complete.
 
 ---
+
+
 
 ## Final System Validation
 
@@ -5600,27 +6075,29 @@ Validation includes the complete assessment workflow.
 
 Representative scenarios include:
 
-* Receiving stock.
-* Creating and editing a draft bill.
-* Finalizing a bill.
-* Oversell prevention.
-* Khata lifecycle.
-* Daily summary.
-* PDF invoice generation.
-* PPTX analysis generation.
-* Owner preference persistence.
-* Multi-turn clarification.
-* Cross-capability collaboration.
-* Runtime replanning.
-* Verification gate enforcement.
-* Faithfulness verification.
-* Recovery from expected failures.
+- Receiving stock.
+- Creating and editing a draft bill.
+- Finalizing a bill.
+- Oversell prevention.
+- Khata lifecycle.
+- Daily summary.
+- PDF invoice generation.
+- PPTX analysis generation.
+- Owner preference persistence.
+- Multi-turn clarification.
+- Cross-capability collaboration.
+- Runtime replanning.
+- Verification gate enforcement.
+- Faithfulness verification.
+- Recovery from expected failures.
 
 The objective is not merely to demonstrate successful execution.
 
 The objective is to demonstrate that the complete architecture behaves exactly as designed under realistic production conditions.
 
 ---
+
+
 
 ## Engineering Principle
 
@@ -5634,7 +6111,7 @@ This production-first engineering approach minimizes integration risk, exposes a
 
 ## 6.17 Runtime Architecture
 
-The Global Orchestrator is implemented as a Cloudflare Agent executing inside the Store Durable Object.
+The Global Orchestrator is implemented as a Cloudflare Agent (with CLoudflare agent SDK which is a runtime + harness, unlike other sdk whick solves for harness only) executing inside the Store Durable Object.
 
 Unlike traditional backend services, the Global Orchestrator is not a long-running server process. It is instantiated as part of each incoming execution request, performs adaptive reasoning for that execution and then terminates. The Durable Object provides the persistent execution environment while the Global Orchestrator provides the adaptive reasoning capability.
 
@@ -5646,24 +6123,30 @@ This separation preserves deterministic business correctness while allowing the 
 
 ---
 
+
+
 ## Runtime Technology Stack
 
 The Global Orchestrator is implemented using the following runtime technologies.
 
-| Responsibility | Technology |
-|----------------|------------|
-| Agent Runtime | Cloudflare Agents SDK |
-| Language Model | Gemini 2.5 Flash |
-| Agent Execution | Cloudflare Agent Runtime |
-| Structured Outputs | Native Structured Output Support |
-| Tool Calling | Cloudflare Agent Tool Interface |
-| Hosting Runtime | Cloudflare Durable Object |
-| Programming Language | TypeScript |
-| Persistent Storage | SQLite attached to the Durable Object |
+
+| Responsibility       | Technology                            |
+| -------------------- | ------------------------------------- |
+| Agent Runtime        | Cloudflare Agents SDK                 |
+| Language Model       | Gemini 3.5 Flash                      |
+| Agent Execution      | Cloudflare Agent Runtime              |
+| Structured Outputs   | Native Structured Output Support      |
+| Tool Calling         | Cloudflare Agent Tool Interface       |
+| Hosting Runtime      | Cloudflare Durable Object             |
+| Programming Language | TypeScript                            |
+| Persistent Storage   | SQLite attached to the Durable Object |
+
 
 Each technology has been selected to satisfy a specific architectural responsibility rather than simply because it is available.
 
 ---
+
+
 
 ## Runtime Responsibilities
 
@@ -5690,6 +6173,8 @@ The orchestrator is intentionally prohibited from:
 Those responsibilities remain delegated to deterministic Business Capabilities.
 
 ---
+
+
 
 ## Runtime Lifecycle
 
@@ -5743,6 +6228,8 @@ Persistent information remains inside the Durable Object.
 
 ---
 
+
+
 ## Runtime Dependencies
 
 The Global Orchestrator depends upon the following runtime components.
@@ -5759,6 +6246,8 @@ Provides:
 
 ---
 
+
+
 ### Execution Runtime
 
 Provides:
@@ -5769,6 +6258,8 @@ Provides:
 - orchestration lifecycle management.
 
 ---
+
+
 
 ### Conversation Manager
 
@@ -5783,6 +6274,8 @@ The orchestrator consumes conversation context but never owns it.
 
 ---
 
+
+
 ### Capability Registry
 
 Provides:
@@ -5795,6 +6288,8 @@ The orchestrator never hardcodes capability implementations.
 
 ---
 
+
+
 ### Business Capabilities
 
 Business Capabilities perform deterministic execution.
@@ -5802,6 +6297,8 @@ Business Capabilities perform deterministic execution.
 The orchestrator coordinates them but never enters their implementation boundaries.
 
 ---
+
+
 
 ## Runtime Isolation
 
@@ -5819,6 +6316,8 @@ This isolation is provided naturally by the Durable Object execution model and e
 
 ---
 
+
+
 ## Runtime Principles
 
 The runtime is governed by the following principles.
@@ -5831,6 +6330,8 @@ The runtime is governed by the following principles.
 - Business correctness never depends upon the language model.
 
 ---
+
+
 
 ## Architectural Rationale
 
@@ -5846,8 +6347,9 @@ This alignment allows the architecture to preserve clear responsibility boundari
 
 Instead of forcing distributed coordination across multiple servers, every store executes inside its own isolated runtime, allowing the Global Orchestrator to reason over a single, consistent and durable business state throughout the entire orchestration lifecycle.
 
-
 # Chapter 7 — Business Capability Architecture
+
+
 
 ## 7.1 Purpose
 
@@ -5857,11 +6359,11 @@ Each Business Capability owns one independent business domain and is solely resp
 
 Examples include:
 
-* Inventory Management
-* Billing
-* Khata (Credit Ledger)
-* Analytics
-* Store Configuration
+- Inventory Management
+- Billing
+- Khata (Credit Ledger)
+- Analytics
+- Store Configuration
 
 (Note: ARTIFACT GENERATION IS NOT A BUSINESS CAPABILITY, IT IS A COMPONENT USED BY BUSINESS CAPABILITIES IF THEY WANT TO GENERATE AN ARTIFACT IF IT CAN BE GENEREATED)
 
@@ -5875,18 +6377,20 @@ The Business Capability decides **how** that objective is achieved.
 
 ---
 
+
+
 ## 7.2 Architectural Philosophy
 
 Every Business Capability behaves as an autonomous domain expert.
 
 It owns:
 
-* business knowledge,
-* business rules,
-* business operations,
-* deterministic execution,
-* verification,
-* business correctness.
+- business knowledge,
+- business rules,
+- business operations,
+- deterministic execution,
+- verification,
+- business correctness.
 
 The capability deliberately hides its internal implementation from the rest of the application.
 
@@ -5898,33 +6402,37 @@ This preserves subsystem independence and allows every capability to evolve inde
 
 ---
 
+
+
 ## 7.3 Responsibility Boundary
 
 The Business Capability owns everything inside its business domain.
 
 It is responsible for:
 
-* understanding the assigned business objective,
-* determining the required business operations,
-* selecting the appropriate deterministic tools,
-* enforcing business rules,
-* validating preconditions,
-* executing business operations,
-* validating postconditions,
-* producing verified business facts,
-* reporting execution outcomes.
+- understanding the assigned business objective,
+- determining the required business operations,
+- selecting the appropriate deterministic tools,
+- enforcing business rules,
+- validating preconditions,
+- executing business operations,
+- validating postconditions,
+- producing verified business facts,
+- reporting execution outcomes.
 
 It is **not** responsible for:
 
-* understanding the owner's overall intent,
-* coordinating multiple business domains,
-* generating conversational responses,
-* communicating directly with the owner,
-* replanning global execution.
+- understanding the owner's overall intent,
+- coordinating multiple business domains,
+- generating conversational responses,
+- communicating directly with the owner,
+- replanning global execution.
 
 Those responsibilities remain with the Global Orchestrator.
 
 ---
+
+
 
 ## 7.4 Internal Architecture
 
@@ -5980,6 +6488,8 @@ The execution philosophy remains identical.
 
 ---
 
+
+
 ## 7.5 Capability Control Loop
 
 Each Business Capability behaves as a small deterministic orchestration engine operating entirely within its own business domain.
@@ -5996,6 +6506,8 @@ The objective is only analyzed.
 
 ---
 
+
+
 ### Step 2 — Plan Business Operations
 
 Determine the sequence of business operations required to satisfy the objective.
@@ -6010,15 +6522,17 @@ Business Objective:
 
 Business Operations:
 
-* Validate draft bill.
-* Verify inventory availability.
-* Reserve inventory.
-* Calculate GST.
-* Persist finalized bill.
-* Commit inventory deduction.
-* Generate Bill if bool is true
+- Validate draft bill.
+- Verify inventory availability.
+- Reserve inventory.
+- Calculate GST.
+- Persist finalized bill.
+- Commit inventory deduction.
+- Generate Bill if bool is true
 
 ---
+
+
 
 ### Step 3 — Resolve Dependencies
 
@@ -6026,15 +6540,17 @@ Before any business operation executes, every dependency is validated.
 
 Examples include:
 
-* required product exists,
-* customer exists,
-* draft bill exists,
-* sufficient inventory exists,
-* payment information available.
+- required product exists,
+- customer exists,
+- draft bill exists,
+- sufficient inventory exists,
+- payment information available.
 
 Execution never proceeds until every dependency has been satisfied.
 
 ---
+
+
 
 ### Step 4 — Select Deterministic Tools
 
@@ -6048,6 +6564,8 @@ Tool sequencing is entirely owned by the capability.
 
 ---
 
+
+
 ### Step 5 — Execute Business Operations
 
 Business operations execute through deterministic tools.
@@ -6058,20 +6576,24 @@ The language model never modifies business state directly.
 
 ---
 
+
+
 ### Step 6 — Verify Business Correctness
 
 After execution completes, deterministic verification confirms that the assigned business objective has actually been achieved.
 
 Verification includes:
 
-* precondition validation,
-* postcondition validation,
-* invariant preservation,
-* resulting business state verification.
+- precondition validation,
+- postcondition validation,
+- invariant preservation,
+- resulting business state verification.
 
 Business correctness is established only after successful verification.
 
 ---
+
+
 
 ### Step 7 — Produce Verified Business Facts
 
@@ -6081,15 +6603,17 @@ Instead, it returns structured business evidence.
 
 This includes:
 
-* objective status,
-* verified business facts,
-* clarification requests,
-* business diagnostics,
-* execution diagnostics.
+- objective status,
+- verified business facts,
+- clarification requests,
+- business diagnostics,
+- execution diagnostics.
 
 These verified facts become the only information consumed by the Global Orchestrator during the next reasoning cycle.
 
 ---
+
+
 
 ## 7.6 Capability Contract
 
@@ -6097,38 +6621,44 @@ Every Business Capability implements the same execution contract.
 
 ### Input
 
-* Business Objective
-* Execution Context
-* Conversation Context
-* Verified Business Facts relevant to the objective
+- Business Objective
+- Execution Context
+- Conversation Context
+- Verified Business Facts relevant to the objective
+
+
 
 ### Output
 
-* Objective Status
-* Verified Business Facts
-* Clarification Request (if required)
-* Execution Diagnostics
-* Failure Diagnostics (if applicable)
+- Objective Status
+- Verified Business Facts
+- Clarification Request (if required)
+- Execution Diagnostics
+- Failure Diagnostics (if applicable)
 
 This common contract allows the Global Orchestrator to coordinate any capability without understanding its internal implementation.
 
 ---
 
+
+
 ## 7.7 Architectural Principles
 
 Every Business Capability must satisfy the following principles.
 
-* Own exactly one business domain.
-* Never communicate directly with another capability.
-* Never modify another capability's business state.
-* Never expose internal tools.
-* Never bypass deterministic verification.
-* Never return unverified business information.
-* Never communicate directly with the owner.
-* Always preserve business invariants.
-* Always return structured execution results.
+- Own exactly one business domain.
+- Never communicate directly with another capability.
+- Never modify another capability's business state.
+- Never expose internal tools.
+- Never bypass deterministic verification.
+- Never return unverified business information.
+- Never communicate directly with the owner.
+- Always preserve business invariants.
+- Always return structured execution results.
 
 ---
+
+
 
 ## 7.8 Runtime Lifecycle
 
@@ -6174,6 +6704,8 @@ This lifecycle forms the constitutional execution model for every capability imp
 
 ---
 
+
+
 ## 7.9 Architectural Summary
 
 Business Capabilities are deterministic domain experts.
@@ -6184,14 +6716,16 @@ Business Capabilities coordinate **within** their own business domain.
 
 This separation establishes a clear architectural hierarchy.
 
-* The Global Orchestrator owns adaptive reasoning.
-* Business Capabilities own deterministic business execution.
-* Tools implement individual business operations.
-* Verification establishes business truth.
+- The Global Orchestrator owns adaptive reasoning.
+- Business Capabilities own deterministic business execution.
+- Tools implement individual business operations.
+- Verification establishes business truth.
 
 As a result, every business request progresses through a hierarchy of responsibility rather than a monolithic agent, allowing the system to remain modular, testable, extensible and architecturally consistent as new business domains are introduced.
 
 # Chapter 8 — Inventory Capability
+
+
 
 ## Purpose
 
@@ -6207,6 +6741,8 @@ Billing, Analytics and other capabilities interact with inventory only through t
 
 ---
 
+
+
 ## Business Objectives
 
 The Inventory Capability is responsible for satisfying the following business objectives.
@@ -6221,7 +6757,11 @@ The Inventory Capability is responsible for satisfying the following business ob
 
 ---
 
+
+
 # Tool 1 — Register Inventory
+
+
 
 ## Why this tool exists
 
@@ -6239,6 +6779,8 @@ The inventory owned by the store has increased.
 Therefore both operations belong to one tool.
 
 ---
+
+
 
 ### Business Rules
 
@@ -6263,6 +6805,8 @@ Product identity must remain unique.
 
 ---
 
+
+
 ### Verification Gates
 
 Before execution verify:
@@ -6280,6 +6824,8 @@ After execution verify:
 
 ---
 
+
+
 ### Failure Handling
 
 Fail when:
@@ -6295,7 +6841,11 @@ No inventory changes are committed.
 
 ---
 
+
+
 # Tool 2 — Query Inventory
+
+
 
 ## Why this tool exists
 
@@ -6315,6 +6865,8 @@ Inventory facts always originate from deterministic storage.
 
 ---
 
+
+
 ### Business Rules
 
 The tool never modifies inventory.
@@ -6326,6 +6878,8 @@ If multiple products match the owner's request, ambiguity must be reported.
 The tool never guesses the intended SKU.
 
 ---
+
+
 
 ### Verification Gates
 
@@ -6342,6 +6896,8 @@ After execution verify:
 
 ---
 
+
+
 ### Failure Handling
 
 Fail when:
@@ -6354,7 +6910,11 @@ Return structured clarification or diagnostics.
 
 ---
 
+
+
 # Tool 3 — Allocate Inventory
+
+
 
 ## Why this tool exists
 
@@ -6371,6 +6931,8 @@ Inventory decides whether the request is valid.
 This makes Inventory the owner of oversell protection.
 
 ---
+
+
 
 ### Business Rules
 
@@ -6394,6 +6956,8 @@ Inventory deductions always originate from finalized business transactions.
 
 ---
 
+
+
 ### Verification Gates
 
 Before execution verify:
@@ -6414,6 +6978,8 @@ After execution verify:
 
 ---
 
+
+
 ### Failure Handling
 
 Fail when:
@@ -6431,6 +6997,8 @@ No partial inventory deduction is permitted.
 Structured diagnostics are returned to the Global Orchestrator.
 
 ---
+
+
 
 ## Architectural Principles
 
@@ -6451,8 +7019,9 @@ This preserves one of the fundamental architectural principles established throu
 
 **Only the owning Business Capability may modify its business domain.**
 
-
 # Chapter 9 — Billing Capability
+
+
 
 ## Purpose
 
@@ -6478,6 +7047,8 @@ The Billing Capability remains the owner of the transaction itself.
 
 ---
 
+
+
 ## Business Objectives
 
 The Billing Capability is responsible for satisfying the following business objectives.
@@ -6492,7 +7063,11 @@ The Billing Capability is responsible for satisfying the following business obje
 
 ---
 
+
+
 # Tool 1 — Manage Draft Bill
+
+
 
 ## Why this tool exists
 
@@ -6509,12 +7084,13 @@ It supports:
 - changing payment method,
 - updating customer information.
 
-
 The draft remains mutable.
 
 No permanent business state outside the draft is modified.
 
 ---
+
+
 
 ### Business Rules
 
@@ -6531,6 +7107,8 @@ Draft modifications remain reversible.
 The draft bill persists across multiple conversation turns.
 
 ---
+
+
 
 ### Verification Gates
 
@@ -6550,6 +7128,8 @@ After execution verify:
 
 ---
 
+
+
 ### Failure Handling
 
 Fail when:
@@ -6565,7 +7145,11 @@ No permanent business state is modified.
 
 ---
 
+
+
 # Tool 2 — Finalize Bill
+
+
 
 ## Why this tool exists
 
@@ -6576,6 +7160,8 @@ It is the only tool permitted to permanently commit a sale.
 It coordinates with other Business Capabilities while remaining the owner of the billing objective.
 
 ---
+
+
 
 ### Business Rules
 
@@ -6599,8 +7185,9 @@ Inventory must only be committed once.
 
 The operation must be idempotent.
 
-If the business objective requests an invoice artifact, the tool shall generate the GST-compliant PDF invoice after successful bill finalization. The PDF is generated from the verified bill data, stored by the runtime, and an artifact reference is returned as part of the structured execution result.
----
+## If the business objective requests an invoice artifact, the tool shall generate the GST-compliant PDF invoice after successful bill finalization. The PDF is generated from the verified bill data, stored by the runtime, and an artifact reference is returned as part of the structured execution result.
+
+
 
 ### Verification Gates
 
@@ -6622,8 +7209,9 @@ After execution verify:
 - bill identifier generated,
 - transaction committed exactly once.
 
-If an invoice artifact was requested, verify that the PDF was successfully generated, stored and that it represents the finalized verified bill before returning the execution result.
----
+## If an invoice artifact was requested, verify that the PDF was successfully generated, stored and that it represents the finalized verified bill before returning the execution result.
+
+
 
 ### Failure Handling
 
@@ -6644,7 +7232,11 @@ Structured diagnostics are returned to the Global Orchestrator.
 
 ---
 
+
+
 # Tool 3 — Query Bill
+
+
 
 ## Why this tool exists
 
@@ -6660,6 +7252,8 @@ It never modifies billing state.
 
 ---
 
+
+
 ### Business Rules
 
 Only persisted billing information may be returned.
@@ -6671,6 +7265,8 @@ Billing information always originates from persistence.
 The tool never derives financial information through reasoning.
 
 ---
+
+
 
 ### Verification Gates
 
@@ -6686,6 +7282,8 @@ After execution verify:
 
 ---
 
+
+
 ### Failure Handling
 
 Fail when:
@@ -6699,6 +7297,8 @@ Return structured diagnostics.
 No billing state is modified.
 
 ---
+
+
 
 ## Architectural Principles
 
@@ -6717,6 +7317,8 @@ Billing coordinates with Inventory and Khata but never delegates ownership of th
 This preserves the architectural principle that every business domain has exactly one owning Business Capability responsible for deterministic business correctness.
 
 # Chapter 10 — Khata Capability
+
+
 
 ## Purpose
 
@@ -6739,6 +7341,8 @@ The Khata Capability alone determines how customer balances change.
 
 ---
 
+
+
 ## Business Objectives
 
 The Khata Capability is responsible for satisfying the following business objectives.
@@ -6751,7 +7355,11 @@ The Khata Capability is responsible for satisfying the following business object
 
 ---
 
+
+
 # Tool 1 — Manage Khata Transaction
+
+
 
 ## Why this tool exists
 
@@ -6770,6 +7378,8 @@ This tool therefore handles:
 A customer's balance is never modified outside this tool.
 
 ---
+
+
 
 ### Business Rules
 
@@ -6791,6 +7401,8 @@ Every transaction must be idempotent.
 
 ---
 
+
+
 ### Verification Gates
 
 Before execution verify:
@@ -6809,6 +7421,8 @@ After execution verify:
 
 ---
 
+
+
 ### Failure Handling
 
 Fail when:
@@ -6825,7 +7439,11 @@ No partial ledger modification is committed.
 
 ---
 
+
+
 # Tool 2 — Query Khata
+
+
 
 ## Why this tool exists
 
@@ -6842,6 +7460,8 @@ It only returns verified ledger information.
 
 ---
 
+
+
 ### Business Rules
 
 The customer must exist.
@@ -6853,6 +7473,8 @@ The tool never estimates or infers balances.
 Only verified credit information may be returned.
 
 ---
+
+
 
 ### Verification Gates
 
@@ -6869,6 +7491,8 @@ After execution verify:
 
 ---
 
+
+
 ### Failure Handling
 
 Fail when:
@@ -6882,6 +7506,8 @@ Return structured diagnostics.
 No business state is modified.
 
 ---
+
+
 
 ## Architectural Principles
 
@@ -6898,8 +7524,9 @@ Billing may request that a credit transaction be recorded, but only the Khata Ca
 
 This preserves deterministic ownership of the credit ledger and ensures that customer financial information remains internally consistent throughout the application.
 
-
 # Chapter 11 — Analytics Capability
+
+
 
 ## Purpose
 
@@ -6921,6 +7548,8 @@ No secondary planning or orchestration occurs inside this capability.
 
 ---
 
+
+
 ## Business Objectives
 
 The Analytics Capability is responsible for:
@@ -6933,7 +7562,11 @@ The Analytics Capability is responsible for:
 
 ---
 
+
+
 # Tool — Generate Analytics
+
+
 
 ## Why this tool exists
 
@@ -6957,6 +7590,8 @@ No separate Business Capability is responsible for document generation.
 
 ---
 
+
+
 ### Business Rules
 
 The tool must only use verified operational business data.
@@ -6974,6 +7609,8 @@ If a presentation artifact is requested, it must be generated only after the ana
 The generated presentation must represent exactly the verified analytical information.
 
 ---
+
+
 
 ### Verification Gates
 
@@ -6999,6 +7636,8 @@ If a presentation artifact was requested:
 
 ---
 
+
+
 ### Failure Handling
 
 Fail when:
@@ -7015,6 +7654,8 @@ No operational business state is modified.
 
 ---
 
+
+
 ## Architectural Principles
 
 Analytics is intentionally implemented without an internal agent.
@@ -7023,13 +7664,17 @@ The capability contains only one deterministic business responsibility.
 
 Introducing an additional planning layer would increase architectural complexity without providing additional reasoning capability.
 
-The Global Orchestrator therefore invokes the Generate Analytics tool directly.
+The Global Orchestrator therefore invokes the Generate Analytics then the capability just invokes the tool directly without using an business capability orchestrator.
 
 The tool produces verified analytical results and, when requested, generates the corresponding presentation artifact before returning a structured execution result to the Global Orchestrator.
 
 
 
+## Articats are never sent to the orchestrator , instead they are told as an artificat is genreater and it is present in the state, the llm will answer like (bill is attached, etc) since the tool own the business truth the artifacts are tru and we just attch them to the telegram message.
+
 # Chapter 12 — Conversation Manager & State Reconstruction
+
+
 
 ## Purpose
 
@@ -7050,6 +7695,8 @@ Business state remains owned by the corresponding Business Capabilities.
 
 ---
 
+
+
 ## Architectural Philosophy
 
 The application never assumes that runtime memory exists.
@@ -7065,6 +7712,8 @@ The system therefore becomes independent of Durable Object lifetime.
 Whether the Durable Object has existed for one second or one week produces identical behaviour.
 
 ---
+
+
 
 ## State Ownership
 
@@ -7093,6 +7742,8 @@ It never contains business truth.
 
 ---
 
+
+
 ### Pending Execution State
 
 Represents execution that has not yet reached a terminal state.
@@ -7107,6 +7758,8 @@ Examples include:
 Pending Execution State allows execution to resume correctly across independent Telegram messages.
 
 ---
+
+
 
 ### Owner Preferences
 
@@ -7130,6 +7783,8 @@ These preferences survive:
 Preferences exist independently of conversation history.
 
 ---
+
+
 
 ## State Reconstruction
 
@@ -7185,6 +7840,8 @@ Every request reconstructs its execution context from persisted state.
 
 ---
 
+
+
 ## Context Assembly
 
 Before the Global Orchestrator begins reasoning, the Conversation Manager assembles the execution context.
@@ -7204,6 +7861,8 @@ Entire conversation histories are never forwarded blindly to the language model.
 
 ---
 
+
+
 ## Preference Management
 
 Owner preferences are treated as persistent configuration rather than conversational information.
@@ -7215,6 +7874,8 @@ Future orchestration cycles automatically receive those preferences during conte
 Business Capabilities never read or modify preference storage directly.
 
 ---
+
+
 
 ## Clarification Recovery
 
@@ -7232,6 +7893,8 @@ When the owner replies, the Conversation Manager reconstructs the suspended exec
 
 ---
 
+
+
 ## State Persistence Rules
 
 The following architectural rules always apply.
@@ -7246,6 +7909,8 @@ The following architectural rules always apply.
 - Business state and owner preferences remain unaffected.
 
 ---
+
+
 
 ## Failure Handling
 
@@ -7266,6 +7931,8 @@ Business state and owner preferences remain preserved.
 
 ---
 
+
+
 ## Observability
 
 The Conversation Manager records:
@@ -7281,6 +7948,8 @@ The Conversation Manager records:
 These events become part of the execution trace and allow engineers to understand how conversational state influenced orchestration behaviour.
 
 ---
+
+
 
 ## Cloudflare Runtime Architecture
 
@@ -7307,6 +7976,8 @@ The architecture therefore treats Durable Objects as stateless execution environ
 
 ---
 
+
+
 ## Production End-to-End Validation
 
 The Conversation Manager is accepted only after demonstrating correct behaviour within the deployed Cloudflare environment.
@@ -7325,6 +7996,8 @@ The implementation is considered complete only when every orchestration cycle ca
 
 ---
 
+
+
 ## Architectural Principles
 
 The Conversation Manager guarantees state reconstructability rather than runtime persistence.
@@ -7339,8 +8012,9 @@ Business Capabilities provide business correctness.
 
 Together they ensure that every Telegram message is processed as an independent execution while preserving the illusion of one continuous conversation.
 
-
 # Chapter 13 — Runtime Architecture
+
+
 
 ## Purpose
 
@@ -7357,6 +8031,8 @@ The objective is to design the application so that it naturally follows Cloudfla
 Every runtime decision is therefore justified by the execution characteristics of the Cloudflare platform rather than by implementation convenience.
 
 ---
+
+
 
 # Architectural Philosophy
 
@@ -7383,6 +8059,8 @@ Every orchestration cycle begins by reconstructing the required execution state 
 The lifetime of a process therefore becomes irrelevant.
 
 ---
+
+
 
 # Runtime Components
 
@@ -7412,6 +8090,8 @@ Each component owns one independent responsibility.
 
 ---
 
+
+
 ## Telegram
 
 Telegram is the external communication channel.
@@ -7426,7 +8106,11 @@ It is simply the transport layer.
 
 ---
 
+
+
 ## Cloudflare Worker
+
+
 
 ### Why Workers Exist
 
@@ -7438,18 +8122,20 @@ Workers are therefore designed for request processing rather than long-lived app
 
 ---
 
+
+
 ### Responsibility in this Architecture
 
 Within this application the Worker acts as the runtime entry point.
 
 Its responsibilities include:
 
-* receiving Telegram webhooks,
-* validating incoming requests,
-* extracting the Store Identifier,
-* locating the correct Durable Object,
-* forwarding the request,
-* returning the final response to Telegram.
+- receiving Telegram webhooks,
+- validating incoming requests,
+- extracting the Store Identifier,
+- locating the correct Durable Object,
+- forwarding the request,
+- returning the final response to Telegram.
 
 The Worker performs no business reasoning.
 
@@ -7461,7 +8147,11 @@ Its responsibility is limited to request routing.
 
 ---
 
+
+
 ## Store Durable Object
+
+
 
 ### Why Durable Objects Exist
 
@@ -7471,10 +8161,10 @@ Many real applications, however, require one logical entity to own mutable state
 
 Examples include:
 
-* a shopping cart,
-* a multiplayer game room,
-* a collaborative document,
-* or, in our case, a single kirana store.
+- a shopping cart,
+- a multiplayer game room,
+- a collaborative document,
+- or, in our case, a single kirana store.
 
 Cloudflare introduced Durable Objects to solve exactly this problem.
 
@@ -7486,18 +8176,20 @@ This greatly simplifies correctness, consistency and concurrency.
 
 ---
 
+
+
 ### Responsibility in this Architecture
 
 One Durable Object represents one store.
 
 It owns:
 
-* conversation reconstruction,
-* orchestration execution,
-* Business Capability execution,
-* SQLite-backed persistent state,
-* execution checkpoints,
-* observability events.
+- conversation reconstruction,
+- orchestration execution,
+- Business Capability execution,
+- SQLite-backed persistent state,
+- execution checkpoints,
+- observability events.
 
 No two Durable Objects ever share ownership of the same store.
 
@@ -7505,7 +8197,11 @@ This establishes a single deterministic execution environment for every business
 
 ---
 
+
+
 ## Capability Registry
+
+
 
 ### Why It Exists
 
@@ -7519,10 +8215,10 @@ It maintains the mapping between business domains and their owning Business Capa
 
 Examples include:
 
-* Inventory
-* Billing
-* Khata
-* Analytics
+- Inventory
+- Billing
+- Khata
+- Analytics
 
 The Global Orchestrator consults the registry after identifying the business objective.
 
@@ -7532,18 +8228,20 @@ Adding a future capability therefore requires registering it rather than modifyi
 
 ---
 
+
+
 ## Business Runtime
 
 The Business Runtime executes the software architecture described throughout this document.
 
 Its responsibilities include:
 
-* reconstructing execution context,
-* running the Global Orchestrator,
-* invoking Business Capabilities,
-* enforcing verification gates,
-* persisting updated state,
-* producing structured execution results.
+- reconstructing execution context,
+- running the Global Orchestrator,
+- invoking Business Capabilities,
+- enforcing verification gates,
+- persisting updated state,
+- producing structured execution results.
 
 The runtime performs exactly one orchestration cycle for every incoming Telegram request.
 
@@ -7553,17 +8251,19 @@ A subsequent request reconstructs state and begins a new orchestration cycle.
 
 ---
 
+
+
 ## Gemini API
 
 Gemini provides adaptive reasoning.
 
 It is responsible for:
 
-* understanding business intent,
-* planning business objectives,
-* coordinating Business Capabilities,
-* requesting clarification,
-* generating grounded conversational responses.
+- understanding business intent,
+- planning business objectives,
+- coordinating Business Capabilities,
+- requesting clarification,
+- generating grounded conversational responses.
 
 Gemini never modifies business state directly.
 
@@ -7572,6 +8272,8 @@ Every business modification occurs exclusively through deterministic Business Ca
 This preserves the separation between reasoning and business correctness established throughout the architecture.
 
 ---
+
+
 
 # Runtime Request Flow
 
@@ -7623,20 +8325,24 @@ Continuity is achieved through persisted state rather than long-running processe
 
 ---
 
+
+
 # Runtime Design Principles
 
 The runtime follows the following architectural principles.
 
-* Workers remain stateless.
-* Durable Objects own one logical store.
-* SQLite is the authoritative source of persisted state.
-* Every request reconstructs execution state.
-* Every request persists updated state before completion.
-* Business state changes occur only through Business Capabilities.
-* Adaptive reasoning never directly modifies business state.
-* Runtime lifetime never influences business correctness.
+- Workers remain stateless.
+- Durable Objects own one logical store.
+- SQLite is the authoritative source of persisted state.
+- Every request reconstructs execution state.
+- Every request persists updated state before completion.
+- Business state changes occur only through Business Capabilities.
+- Adaptive reasoning never directly modifies business state.
+- Runtime lifetime never influences business correctness.
 
 ---
+
+
 
 # Production Validation
 
@@ -7644,18 +8350,20 @@ The runtime architecture is considered complete only after demonstrating success
 
 Validation must demonstrate:
 
-* Telegram webhooks reaching the Worker.
-* Correct routing to the owning Durable Object.
-* Successful state reconstruction from SQLite.
-* Correct orchestration execution.
-* Successful Business Capability execution.
-* Verification gate enforcement.
-* State persistence after execution.
-* Correct response delivery back to Telegram.
+- Telegram webhooks reaching the Worker.
+- Correct routing to the owning Durable Object.
+- Successful state reconstruction from SQLite.
+- Correct orchestration execution.
+- Successful Business Capability execution.
+- Verification gate enforcement.
+- State persistence after execution.
+- Correct response delivery back to Telegram.
 
 The runtime is accepted only when every orchestration cycle behaves identically regardless of whether the Durable Object was already active or newly activated for that request.
 
 ---
+
+
 
 # Architectural Summary
 
@@ -7673,6 +8381,8 @@ Together these components create a runtime that is resilient to process lifetime
 
 # Chapter 14 — Persistence & Deployment Architecture
 
+
+
 ## Purpose
 
 The Persistence & Deployment Architecture describes how business state is owned, persisted and executed within the Cloudflare platform.
@@ -7685,18 +8395,20 @@ The architecture intentionally adopts Cloudflare's execution philosophy rather t
 
 ---
 
+
+
 # Architectural Philosophy
 
 Traditional cloud applications usually separate compute and persistence into independent systems.
 
 A typical architecture consists of:
 
-* application servers,
-* a remote relational database,
-* a distributed cache,
-* synchronization mechanisms,
-* locking,
-* connection pooling.
+- application servers,
+- a remote relational database,
+- a distributed cache,
+- synchronization mechanisms,
+- locking,
+- connection pooling.
 
 Each request typically travels across multiple network boundaries before completing.
 
@@ -7718,6 +8430,8 @@ Our application intentionally follows this philosophy.
 
 ---
 
+
+
 # Persistence Philosophy
 
 Every business domain has exactly one owner.
@@ -7733,6 +8447,8 @@ The application therefore does not perform routine business operations over the 
 Business execution occurs beside its authoritative state.
 
 ---
+
+
 
 # Store Ownership Model
 
@@ -7762,6 +8478,8 @@ The architecture therefore reasons about ownership rather than distributed coord
 
 ---
 
+
+
 # Persistent State Model
 
 SQLite is the authoritative source of truth.
@@ -7774,14 +8492,16 @@ Owned by the Business Capabilities.
 
 Examples include:
 
-* inventory,
-* bills,
-* customer credit,
-* historical transactions.
+- inventory,
+- bills,
+- customer credit,
+- historical transactions.
 
 Business state represents the operational knowledge of the store.
 
 ---
+
+
 
 ### Conversation State
 
@@ -7789,13 +8509,15 @@ Owned by the Conversation Manager.
 
 Examples include:
 
-* conversation metadata,
-* clarification checkpoints,
-* pending execution references.
+- conversation metadata,
+- clarification checkpoints,
+- pending execution references.
 
 Conversation state exists only to reconstruct future execution.
 
 ---
+
+
 
 ### Owner State
 
@@ -7803,14 +8525,16 @@ Represents long-lived owner preferences.
 
 Examples include:
 
-* preferred payment method,
-* preferred product variants,
-* shop information,
-* GSTIN.
+- preferred payment method,
+- preferred product variants,
+- shop information,
+- GSTIN.
 
 Owner state survives every conversation.
 
 ---
+
+
 
 ### Runtime State
 
@@ -7818,14 +8542,16 @@ Represents execution metadata.
 
 Examples include:
 
-* processed Telegram update identifiers,
-* execution checkpoints,
-* observability references,
-* artifact references.
+- processed Telegram update identifiers,
+- execution checkpoints,
+- observability references,
+- artifact references.
 
 Runtime state exists to guarantee correctness rather than business functionality.
 
 ---
+
+
 
 # Why SQLite Fits This Architecture
 
@@ -7839,16 +8565,18 @@ This significantly simplifies the application architecture.
 
 The runtime does not need to manage:
 
-* database connection pools,
-* network retries for ordinary state access,
-* distributed transactions between application servers and persistence,
-* external cache invalidation.
+- database connection pools,
+- network retries for ordinary state access,
+- distributed transactions between application servers and persistence,
+- external cache invalidation.
 
 Instead, execution reconstructs state directly from the store's persistent SQLite database, performs deterministic business operations and persists the updated state before completing.
 
 The architecture therefore relies on locality of ownership rather than distributed coordination.
 
 ---
+
+
 
 # Caching Philosophy
 
@@ -7869,6 +8597,8 @@ No additional cache reconstruction logic is required.
 The application therefore remains architecturally correct regardless of runtime lifetime.
 
 ---
+
+
 
 # Deployment Architecture
 
@@ -7914,13 +8644,15 @@ Each layer has exactly one clearly defined responsibility.
 
 ---
 
+
+
 # Scalability Model
 
 Scalability is achieved by increasing the number of independent Store Durable Objects rather than increasing the size of a centralized application server.
 
-Every additional store receives its own execution environment and its own persistent state.
+Every additional business kirana store receives its own execution environment and its own persistent state.
 
-Stores therefore remain isolated from one another.
+Kirana Stores therefore remain isolated from one another.
 
 Business activity within one store does not introduce coordination complexity for unrelated stores.
 
@@ -7928,41 +8660,47 @@ The architecture naturally scales by replicating ownership boundaries rather tha
 
 ---
 
+
+
 # Correctness Model
 
 The architecture preserves correctness through ownership.
 
 Business state changes occur only:
 
-* inside the owning Durable Object,
-* through the owning Business Capability,
-* using deterministic business operations,
-* followed immediately by verification,
-* before persistence completes.
+- inside the owning Durable Object,
+- through the owning Business Capability,
+- using deterministic business operations,
+- followed immediately by verification,
+- before persistence completes.
 
 Because ownership is never shared, correctness depends upon deterministic execution rather than distributed synchronization.
 
 ---
 
+
+
 # Production Validation
 
 The persistence and deployment architecture is considered complete only after demonstrating:
 
-* successful Worker deployment,
-* successful Durable Object creation,
-* successful routing to the correct store,
-* durable persistence across requests,
-* successful state reconstruction after Durable Object activation,
-* persistence across Worker restarts,
-* independent isolation between multiple stores,
-* successful observability of runtime state,
-* correct attachment delivery for generated invoices and analysis presentations.
+- successful Worker deployment,
+- successful Durable Object creation,
+- successful routing to the correct store,
+- durable persistence across requests,
+- successful state reconstruction after Durable Object activation,
+- persistence across Worker restarts,
+- independent isolation between multiple stores,
+- successful observability of runtime state,
+- correct attachment delivery for generated invoices and analysis presentations.
 
 Validation is performed exclusively against the deployed Cloudflare environment.
 
 The production deployment is treated as the authoritative runtime throughout development.
 
 ---
+
+
 
 # Architectural Summary
 
@@ -7976,8 +8714,9 @@ Business correctness is therefore achieved through clear ownership boundaries, d
 
 The result is an architecture that remains simpler, easier to reason about and naturally aligned with Cloudflare's execution model while fully satisfying the consistency requirements of the assessment.
 
-
 # Chapter 15 — Engineering Methodology
+
+
 
 ## Purpose
 
@@ -7995,6 +8734,8 @@ The implementation process therefore becomes a collaboration between human engin
 
 ---
 
+
+
 # Engineering Philosophy
 
 This project follows the principle that architecture is designed by humans while implementation is delegated to an AI coding agent operating inside a controlled engineering loop.
@@ -8008,6 +8749,8 @@ The architecture, invariants, acceptance criteria and verification strategy alwa
 Every implementation decision must be traceable back to those documents.
 
 ---
+
+
 
 # The Engineering Loop
 
@@ -8063,6 +8806,8 @@ The loop terminates only when the implementation satisfies every architectural r
 
 ---
 
+
+
 # Goal Documents
 
 Every implementation begins with a Goal Document.
@@ -8071,12 +8816,12 @@ The Goal Document becomes the single source of truth for one implementation task
 
 It describes:
 
-* the architectural objective,
-* responsibilities,
-* constraints,
-* acceptance criteria,
-* verification requirements,
-* production validation requirements.
+- the architectural objective,
+- responsibilities,
+- constraints,
+- acceptance criteria,
+- verification requirements,
+- production validation requirements.
 
 The coding agent does not derive goals independently.
 
@@ -8086,6 +8831,8 @@ If implementation drifts away from the goal, the Goal Document remains the autho
 
 ---
 
+
+
 # Test-First Engineering
 
 Implementation begins by defining how success will be measured.
@@ -8094,17 +8841,66 @@ Tests are therefore designed before implementation.
 
 Tests validate:
 
-* architectural invariants,
-* business correctness,
-* component behaviour,
-* failure handling,
-* production behaviour.
+- architectural invariants,
+- business correctness,
+- component behaviour,
+- failure handling,
+- production behaviour.
 
 The coding agent receives an objective that can be verified rather than merely described.
 
 Verification therefore becomes deterministic.
 
 ---
+
+
+
+# Production-First Testing
+
+This project separates **fast unit tests** from **production integration tests**. Mocks must not be the sole authority for external API behavior.
+
+## Unit tests — pure logic only
+
+Unit tests cover deterministic transformation logic with **real-shaped Telegram payloads** (fixtures captured from or matching the Telegram Update schema). No network calls, no mocked `fetch`, no mocked Durable Object namespaces.
+
+Examples:
+
+- update parsing and command entity extraction,
+- store identity resolution (`storeId = String(userId)`),
+- `ApplicationRequest` normalization,
+- stub DO handler responses,
+- structured transport log shape (console only).
+
+Fixtures live beside the module (`fixtures/telegram-updates.ts`). Tests are colocated (`*.test.ts`).
+
+## Integration tests — real Worker when secrets are available
+
+Integration tests POST to the **deployed Worker webhook URL** using secrets from `.dev.vars` (loaded via `vitest.setup.ts`). Required variables:
+
+- `WORKER_WEBHOOK_URL` — full URL including `/webhook`
+- `WEBHOOK_SECRET` — matches Wrangler secret and Telegram `setWebhook`
+
+When secrets are absent (e.g. CI without credentials), integration tests **skip gracefully** with a clear message. The human operator runs the full suite locally after deploy.
+
+Integration tests verify HTTP boundary behavior (403 wrong secret, 400 malformed JSON, 200 supported/unsupported handoff). They do not mock `STORE_DO`, `sendMessage`, or `fetch` to Telegram.
+
+Outbound Telegram delivery (`sendMessage`, `sendDocument`), DO RPC, and attachment multipart upload are validated through:
+
+- production deployment,
+- production integration tests against live worker,
+- manual production validation checklist (`running.md`).
+
+## Human in the loop
+
+Production validation is mandatory before component acceptance. The engineer deploys, registers the webhook, exercises the live bot, and reviews Cloudflare transport logs. Automated integration tests accelerate the loop but do not replace live Telegram verification.
+
+## Rule
+
+**Mocks must not be the sole authority for external API behavior.** If a test only asserts that a mock was called, it belongs in production integration or the manual checklist—not as a substitute for real Worker + Telegram behavior.
+
+---
+
+
 
 # Self-Verification Loop
 
@@ -8148,6 +8944,8 @@ The agent therefore iterates against evidence rather than confidence.
 
 ---
 
+
+
 # Verification Philosophy
 
 The implementation agent is never the sole authority responsible for judging correctness.
@@ -8156,12 +8954,12 @@ Every iteration must be validated using independent evidence.
 
 Examples include:
 
-* automated tests,
-* type checking,
-* linting,
-* architectural acceptance tests,
-* production validation,
-* human engineering review.
+- automated tests,
+- type checking,
+- linting,
+- architectural acceptance tests,
+- production validation,
+- human engineering review.
 
 The coding agent proposes.
 
@@ -8171,17 +8969,19 @@ Whenever verification fails, the failure diagnostics become structured feedback 
 
 ---
 
+
+
 # Human Responsibilities
 
 The human engineer remains responsible for:
 
-* architecture,
-* software decomposition,
-* engineering judgement,
-* defining business rules,
-* defining acceptance criteria,
-* reviewing implementation,
-* accepting production behaviour.
+- architecture,
+- software decomposition,
+- engineering judgement,
+- defining business rules,
+- defining acceptance criteria,
+- reviewing implementation,
+- accepting production behaviour.
 
 The human does not manually implement every detail.
 
@@ -8189,20 +8989,24 @@ Instead, the human continuously improves the engineering loop itself.
 
 ---
 
+
+
 # AI Responsibilities
 
 The coding agent is responsible for:
 
-* implementing the Goal Document,
-* preserving architectural boundaries,
-* running verification,
-* interpreting verification failures,
-* correcting implementation,
-* repeating the verification loop until the defined stopping conditions are reached.
+- implementing the Goal Document,
+- preserving architectural boundaries,
+- running verification,
+- interpreting verification failures,
+- correcting implementation,
+- repeating the verification loop until the defined stopping conditions are reached.
 
 The coding agent never changes architectural intent without explicit human approval.
 
 ---
+
+
 
 # Production-First Development
 
@@ -8214,16 +9018,18 @@ Production behaviour defines correctness.
 
 Every completed component is therefore:
 
-* deployed to Cloudflare,
-* executed through the deployed Telegram bot,
-* validated end-to-end,
-* accepted only after successful production execution.
+- deployed to Cloudflare,
+- executed through the deployed Telegram bot,
+- validated end-to-end,
+- accepted only after successful production execution.
 
 Production deployment is not the final milestone.
 
 It is part of every engineering iteration.
 
 ---
+
+
 
 # Incremental Development
 
@@ -8233,15 +9039,17 @@ Each component follows the complete engineering loop independently.
 
 No subsequent component begins implementation until the current component has satisfied:
 
-* implementation,
-* verification,
-* production deployment,
-* end-to-end validation,
-* human acceptance.
+- implementation,
+- verification,
+- production deployment,
+- end-to-end validation,
+- human acceptance.
 
 This prevents architectural debt from accumulating across the system.
 
 ---
+
+
 
 # Context Management
 
@@ -8255,35 +9063,41 @@ The architecture therefore remains the persistent source of truth instead of con
 
 ---
 
+
+
 # Stopping Rules
 
 The engineering loop terminates only when all of the following conditions are satisfied.
 
-* Architectural responsibilities implemented.
-* Acceptance criteria satisfied.
-* Verification succeeds.
-* Production deployment succeeds.
-* End-to-end validation succeeds.
-* Human engineering review approves the implementation.
+- Architectural responsibilities implemented.
+- Acceptance criteria satisfied.
+- Verification succeeds.
+- Production deployment succeeds.
+- End-to-end validation succeeds.
+- Human engineering review approves the implementation.
 
 If any condition fails, the implementation re-enters the engineering loop.
 
 ---
 
+
+
 # Engineering Principles
 
 The implementation process follows the following principles.
 
-* Architecture before implementation.
-* Goals before prompts.
-* Tests before code.
-* Verification before confidence.
-* Production before local optimisation.
-* Small engineering loops over large autonomous tasks.
-* Independent evidence over model self-assessment.
-* Human engineering judgement over autonomous architectural decisions.
+- Architecture before implementation.
+- Goals before prompts.
+- Tests before code.
+- Verification before confidence.
+- Production before local optimisation.
+- Small engineering loops over large autonomous tasks.
+- Independent evidence over model self-assessment.
+- Human engineering judgement over autonomous architectural decisions.
 
 ---
+
+
 
 # Architectural Summary
 
@@ -8301,8 +9115,9 @@ The coding agent repeatedly improves its implementation within these constraints
 
 By placing architecture, verification and production validation around the coding agent, the engineering loop becomes deterministic, auditable and repeatable while preserving the productivity advantages of modern AI-assisted software development.
 
-
 # Appendix B — Production Readiness & Assessment Traceability
+
+
 
 ## Purpose
 
@@ -8316,14 +9131,20 @@ Where additional clarification is valuable, this appendix extends the architectu
 
 ---
 
+
+
 # B.1 Grounding & Verified Business Facts
+
+
 
 ## Architectural Location
 
-* Global Orchestrator
-* Business Capability Architecture
-* Verification Gates
-* Faithfulness Verification
+- Global Orchestrator
+- Business Capability Architecture
+- Verification Gates
+- Faithfulness Verification
+
+
 
 ## Clarification
 
@@ -8335,11 +9156,11 @@ Instead, every Business Capability returns **Verified Business Facts** after suc
 
 Examples include:
 
-* verified inventory quantities,
-* verified billing totals,
-* verified GST calculations,
-* verified customer balances,
-* verified analytical results.
+- verified inventory quantities,
+- verified billing totals,
+- verified GST calculations,
+- verified customer balances,
+- verified analytical results.
 
 These verified facts become the only information consumed by subsequent orchestration cycles and by response generation.
 
@@ -8347,13 +9168,19 @@ The final conversational response is therefore grounded exclusively in verified 
 
 ---
 
+
+
 # B.2 Oversell Protection & Atomic Inventory Commitment
+
+
 
 ## Architectural Location
 
-* Inventory Capability
-* Billing Capability
-* Business Verification
+- Inventory Capability
+- Billing Capability
+- Business Verification
+
+
 
 ## Clarification
 
@@ -8389,28 +9216,34 @@ Inventory is modified only during bill finalization.
 
 The Inventory Capability verifies:
 
-* product existence,
-* available quantity,
-* business constraints.
+- product existence,
+- available quantity,
+- business constraints.
 
 Only after successful verification does the Inventory Capability perform one atomic inventory commitment.
 
 If any verification fails:
 
-* inventory remains unchanged,
-* bill finalization is rejected,
-* structured diagnostics are returned to the Global Orchestrator.
+- inventory remains unchanged,
+- bill finalization is rejected,
+- structured diagnostics are returned to the Global Orchestrator.
 
 This guarantees that inventory never becomes negative and that partially completed sales never corrupt business state.
 
 ---
 
+
+
 # B.3 Concurrency
+
+
 
 ## Architectural Location
 
-* Runtime Architecture
-* Persistence & Deployment Architecture
+- Runtime Architecture
+- Persistence & Deployment Architecture
+
+
 
 ## Clarification
 
@@ -8424,9 +9257,9 @@ Consequently, all business mutations for a single store execute within the same 
 
 Examples include:
 
-* two concurrent billing requests,
-* stock-in while another bill is finalizing,
-* simultaneous khata updates.
+- two concurrent billing requests,
+- stock-in while another bill is finalizing,
+- simultaneous khata updates.
 
 Because ownership is never shared between multiple execution environments, business mutations cannot interleave unpredictably.
 
@@ -8436,13 +9269,19 @@ No distributed locking, external coordination service or application-level synch
 
 ---
 
+
+
 # B.4 Idempotency
+
+
 
 ## Architectural Location
 
-* Runtime Architecture
-* Conversation Manager
-* Persistence Architecture
+- Runtime Architecture
+- Conversation Manager
+- Persistence Architecture
+
+
 
 ## Clarification
 
@@ -8478,10 +9317,10 @@ Execute Business Operation
 
 The Execution Ledger records:
 
-* Telegram Update ID,
-* execution status,
-* resulting business transaction,
-* response metadata.
+- Telegram Update ID,
+- execution status,
+- resulting business transaction,
+- response metadata.
 
 Before any business operation executes, the runtime verifies whether the update has already been processed.
 
@@ -8491,18 +9330,24 @@ Instead, the previously recorded execution result is returned.
 
 This guarantees that retries cannot:
 
-* double-finalize a bill,
-* double-decrement inventory,
-* duplicate khata entries,
-* duplicate business transactions.
+- double-finalize a bill,
+- double-decrement inventory,
+- duplicate khata entries,
+- duplicate business transactions.
 
 ---
 
+
+
 # B.5 GST Ownership
+
+
 
 ## Architectural Location
 
-* Billing Capability
+- Billing Capability
+
+
 
 ## Clarification
 
@@ -8510,13 +9355,13 @@ Tax correctness is entirely owned by the Billing Capability.
 
 The Billing Capability is responsible for:
 
-* HSN code selection,
-* GST slab determination,
-* CGST calculation,
-* SGST calculation,
-* tax rounding,
-* invoice tax breakdown,
-* total verification.
+- HSN code selection,
+- GST slab determination,
+- CGST calculation,
+- SGST calculation,
+- tax rounding,
+- invoice tax breakdown,
+- total verification.
 
 GST calculations always originate from persisted product information.
 
@@ -8524,11 +9369,11 @@ The language model never calculates tax.
 
 During bill finalization, the Billing Capability verifies:
 
-* per-item GST,
-* total GST,
-* CGST/SGST split,
-* invoice totals,
-* rounding correctness.
+- per-item GST,
+- total GST,
+- CGST/SGST split,
+- invoice totals,
+- rounding correctness.
 
 Only verified tax calculations become part of the finalized bill.
 
@@ -8538,7 +9383,11 @@ The PDF therefore becomes another representation of verified business facts rath
 
 ---
 
+
+
 # B.6 Artifact Generation
+
+
 
 ## Architectural Clarification
 
@@ -8554,37 +9403,43 @@ Examples include:
 
 Billing Capability
 
-* GST-compliant PDF invoice.
+- GST-compliant PDF invoice.
 
 Analytics Capability
 
-* PowerPoint sales analysis.
+- PowerPoint sales analysis.
 
 When an artifact is requested, the owning Business Capability:
 
-* completes deterministic business execution,
-* verifies business correctness,
-* generates the requested artifact,
-* stores the artifact,
-* returns an artifact reference within its structured execution result.
+- completes deterministic business execution,
+- verifies business correctness,
+- generates the requested artifact,
+- stores the artifact,
+- returns an artifact reference within its structured execution result.
 
 The Global Orchestrator therefore receives:
 
-* verified business facts,
-* artifact metadata,
-* execution diagnostics.
+- verified business facts,
+- artifact metadata,
+- execution diagnostics.
 
 The final conversational response may then inform the owner that the requested document has been attached.
 
 ---
 
+
+
 # B.7 Agent Harness Mapping
+
+
 
 ## Architectural Location
 
-* Global Orchestrator
-* Business Capability Architecture
-* Runtime Architecture
+- Global Orchestrator
+- Business Capability Architecture
+- Runtime Architecture
+
+
 
 ## Clarification
 
@@ -8593,6 +9448,7 @@ The architecture has intentionally been designed independently of any specific a
 It naturally maps onto modern agent harnesses.
 
 The mapping is as follows.
+
 
 | Architectural Component | Agent Harness Equivalent |
 | ----------------------- | ------------------------ |
@@ -8603,13 +9459,17 @@ The mapping is as follows.
 | Verification Gates      | Post-tool Validation     |
 | Runtime Control Loop    | Agent Execution Loop     |
 
+
 This separation ensures that the architecture remains portable across Cloudflare Agents, Claude Agent SDK, Deep Agents, Vercel AI SDK or equivalent frameworks without changing its fundamental design.
 
 ---
 
+
+
 # B.8 Production Readiness Summary
 
 The architecture explicitly satisfies the following production requirements.
+
 
 | Production Concern         | Architectural Solution              |
 | -------------------------- | ----------------------------------- |
@@ -8630,7 +9490,10 @@ The architecture explicitly satisfies the following production requirements.
 | Production persistence     | Durable Objects + SQLite            |
 | Cloud deployment           | Runtime & Deployment Architecture   |
 
+
 ---
+
+
 
 # Final Engineering Principle
 
@@ -8641,6 +9504,3 @@ Language models are responsible for understanding intent, planning objectives an
 Deterministic software remains responsible for business correctness, persistence, verification, concurrency, idempotency, tax calculation, inventory consistency and every permanent modification of business state.
 
 By preserving this separation throughout the system, the architecture remains predictable, verifiable and production-ready while allowing the language model to contribute only where adaptive reasoning is genuinely required.
-
-
-
