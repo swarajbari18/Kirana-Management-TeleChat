@@ -12,6 +12,15 @@ export async function deliver(
   delivery: DeliveryTarget,
   botToken: string,
 ): Promise<void> {
+  // Empty ok result = delivery skip (duplicate updateId ledger hit in DO).
+  if (
+    result.status === "ok" &&
+    result.messages.length === 0 &&
+    result.attachments.length === 0
+  ) {
+    return;
+  }
+
   if (
     result.status === "error" &&
     result.messages.length === 0 &&

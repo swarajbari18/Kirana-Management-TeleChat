@@ -15,6 +15,11 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  INTEGRATION_PROBE_CHAT_ID,
+  INTEGRATION_PROBE_MESSAGE,
+  INTEGRATION_PROBE_USER_ID,
+} from "../fixtures/test-identities.js";
+import {
   photoMessageUpdate,
   textMessageUpdate,
 } from "../fixtures/telegram-updates.js";
@@ -55,7 +60,7 @@ const TEST_CHAT_ID = process.env.TEST_CHAT_ID
   : undefined;
 
 function integrationChatId(): number {
-  return TEST_CHAT_ID ?? 900000001;
+  return TEST_CHAT_ID ?? INTEGRATION_PROBE_CHAT_ID;
 }
 
 function redactUrl(url: string): string {
@@ -125,9 +130,9 @@ describe("production webhook integration", () => {
         const update = textMessageUpdate({
           updateId: uniqueSuffix,
           messageId: uniqueSuffix,
-          userId: 900000001,
-          chatId: 900000001,
-          text: "production integration probe",
+          userId: INTEGRATION_PROBE_USER_ID,
+          chatId: INTEGRATION_PROBE_CHAT_ID,
+          text: INTEGRATION_PROBE_MESSAGE,
         });
 
         const response = await fetch(webhookUrl(), {

@@ -4,40 +4,40 @@ overview: Complete implementation plan for Component 1 (Worker & Telegram Adapte
 todos:
   - id: scaffold
     content: Scaffold root project + deep module folders (worker-telegram-adapter, store-durable-object) with colocated test setup
-    status: in_progress
+    status: completed
   - id: contracts
     content: Define ApplicationRequest and ExecutionResult contracts (including full attachment types) in worker-telegram-adapter/contracts/
-    status: pending
+    status: completed
   - id: telegram-parsing
     content: Implement telegram/command-parser and worker/update-parser with bot_command entity detection (no regex)
-    status: pending
+    status: completed
   - id: worker-pipeline
     content: Implement identity-resolver, do-resolver, request-normalizer, request-dispatcher, webhook-handler with waitUntil async handoff
-    status: pending
+    status: completed
   - id: telegram-outbound
     content: Implement telegram-client (sendMessage + sendDocument) and execution-result-adapter with locked user-facing strings and full attachment delivery
-    status: pending
+    status: completed
   - id: observability
     content: Implement transport-layer structured logging (updateId, storeId, workerRequestId, durableObjectId, duration, status)
-    status: pending
+    status: completed
   - id: stub-do
     content: Implement StoreDurableObject stub with RPC handleApplicationRequest (/start → welcome, else stub greeting)
-    status: pending
+    status: completed
   - id: unit-tests
     content: Write and pass all colocated unit tests in worker-telegram-adapter and store-durable-object (including attachment delivery tests)
-    status: pending
+    status: completed
   - id: integration-tests
     content: Write and pass worker-telegram-adapter/integration/webhook.integration.test.ts
-    status: pending
+    status: completed
   - id: deploy-prod
     content: Deploy to Cloudflare, register Telegram webhook with secret + allowed_updates, set secrets
-    status: pending
+    status: completed
   - id: prod-validation
     content: Execute Part 8.4 production validation script (text, /start, /new, sticker, multi-tenant, logs)
-    status: pending
+    status: completed
   - id: human-review
     content: Complete Part 10 human review checklist and obtain acceptance before Component 2
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -711,17 +711,15 @@ Verify: `getWebhookInfo` shows correct URL, no errors.
 
 ---
 
-## Part 8 — Test Design (Production-First Testing)
+## Part 8 — Test Design (Test-First Engineering)
 
-**Reference:** Chapter 15 Test-First Engineering and **Production-First Testing**; [§2 Test Strategy](docs/system_Architecture.md).
+**Reference:** Chapter 15 Test-First Engineering; [§2 Test Strategy](docs/system_Architecture.md).
 
-Tests are designed **before** implementation. The suite splits into **unit tests** (pure logic, real fixtures) and **production integration tests** (real deployed Worker). Mocks must not be the sole authority for external API behavior.
+Tests are designed **before** implementation. Implementer writes tests first or alongside each module.
 
-**Operator note:** Copy `.dev.vars.example` → `.dev.vars`, deploy worker (see `running.md`), then run `npm test` for the full suite.
+### 8.1 Unit tests (colocated in each deep module)
 
-### 8.1 Unit tests (colocated — pure logic, real Telegram fixtures)
-
-No mocked `fetch`, no mocked `STORE_DO`, no mocked `sendMessage`. Fixtures use real-shaped `Update` JSON from `fixtures/telegram-updates.ts`.
+All test files live beside their implementation inside `worker-telegram-adapter/` or `store-durable-object/`.
 
 #### `worker-telegram-adapter/update-parser.test.ts`
 
@@ -735,7 +733,7 @@ No mocked `fetch`, no mocked `STORE_DO`, no mocked `sendMessage`. Fixtures use r
 | photo message  | message with photo, no text                                                       | Unsupported                            |
 | sticker        | message with sticker                                                              | Unsupported                            |
 | edited_message | update.edited_message                                                             | Unsupported                            |
-| missing from   | message without from                                                              | Unsupported                            |
+| missing from   | message without from                                                              | Identity error path                    |
 | callback_query | update.callback_query                                                             | Unsupported                            |
 
 
@@ -767,12 +765,29 @@ No mocked `fetch`, no mocked `STORE_DO`, no mocked `sendMessage`. Fixtures use r
 | /new command          | resetRequested=true                        |
 
 
-#### `worker-telegram-adapter/observability.test.ts`
+#### `worker-telegram-adapter/execution-result-adapter.test.ts`
 
 
-| Test case              | Expected                          |
-| ---------------------- | --------------------------------- |
-| emitTransportLog entry | Structured JSON with required fields |
+| Test case                     | Expected                                      |
+| ----------------------------- | --------------------------------------------- |
+| Single text message           | One sendMessage call                          |
+| Multiple messages             | Ordered sendMessage calls                     |
+| Single document attachment    | One sendDocument call with correct filename/mimeType/bytes |
+| Text then document            | sendMessage first, then sendDocument          |
+| Multiple attachments          | Ordered sendDocument calls                    |
+| Empty messages + error status | Generic error sent                            |
+| sendDocument API failure      | Throws; caught by dispatcher                  |
+
+
+#### `worker-telegram-adapter/telegram-client.test.ts`
+
+
+| Test case                  | Expected                                           |
+| -------------------------- | -------------------------------------------------- |
+| sendMessage success        | POST to correct URL with JSON body                 |
+| sendMessage API error      | Throws TelegramApiError                            |
+| sendDocument multipart     | Correct FormData: chat_id, document blob, caption  |
+| sendDocument oversize hint | Document > 50MB rejected before API call (optional guard) |
 
 
 #### `store-durable-object/handler.test.ts`
@@ -780,32 +795,21 @@ No mocked `fetch`, no mocked `STORE_DO`, no mocked `sendMessage`. Fixtures use r
 
 | Test case                | Expected                              |
 | ------------------------ | ------------------------------------- |
-| /start command request   | Welcome text; attachments=[]          |
-| Plain text request       | Stub greeting; attachments=[]         |
-| /new with resetRequested | Stub greeting; attachments=[]         |
+| /start command request   | Welcome text; attachments=[]              |
+| Plain text request       | Stub greeting; attachments=[]             |
+| /new with resetRequested | Stub greeting; attachments=[]             |
 
 
-#### Production-tested (no unit mocks)
+### 8.2 Integration tests (`worker-telegram-adapter/integration/webhook.integration.test.ts`)
 
-The following are **not** unit-tested with mocked APIs. Behavior is verified via production integration tests and the manual checklist (§8.4):
 
-- `telegram-client` — `sendMessage`, `sendDocument` (real Telegram Bot API)
-- `execution-result-adapter` — delivery ordering and error paths
-- `do-resolver` — `idFromName` routing (Cloudflare DO runtime)
-- `request-dispatcher` — `waitUntil` pipeline + DO RPC
-- `webhook-handler` — full HTTP handoff
+| Test case                    | Expected                                                              |
+| ---------------------------- | --------------------------------------------------------------------- |
+| POST /webhook wrong secret   | 403                                                                   |
+| POST /webhook valid text     | 200 immediately; DO stub response delivered (mock DO or real binding) |
+| POST /webhook unsupported    | 200; unsupported message sent                                         |
+| POST /webhook malformed JSON | 400                                                                   |
 
-### 8.2 Production integration tests (`worker-telegram-adapter/integration/production.integration.test.ts`)
-
-Requires `.dev.vars` with `WORKER_WEBHOOK_URL` and `WEBHOOK_SECRET`. Skips gracefully when absent.
-
-| Test case                         | Expected                                      |
-| --------------------------------- | --------------------------------------------- |
-| POST /webhook wrong secret        | 403                                           |
-| POST /webhook malformed JSON      | 400                                           |
-| POST /webhook supported text      | 200 immediately                               |
-| POST /webhook unsupported (photo) | 200                                           |
-| getWebhookInfo (if BOT_TOKEN set) | URL ends with `/webhook`; no last_error_message |
 
 ### 8.3 Architectural invariant checks
 

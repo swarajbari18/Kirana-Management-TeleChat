@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1785701894916,
+      "tag": "0000_awesome_captain_midlands",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785702500000,
+      "tag": "0001_ledger_delivery_split",
+      "breakpoints": true
+    }
+  ]
+}

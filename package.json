@@ -11,11 +11,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@grammyjs/types": "^3.17.0"
+    "@grammyjs/types": "^3.17.0",
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260801.1",
     "@types/node": "^22.13.4",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5",
     "wrangler": "^4.118.0"

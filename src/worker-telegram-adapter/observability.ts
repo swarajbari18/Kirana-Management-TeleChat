@@ -1,5 +1,6 @@
 export type TransportResultStatus =
   | "success"
+  | "skipped_delivery"
   | "unsupported"
   | "rejected"
   | "error";

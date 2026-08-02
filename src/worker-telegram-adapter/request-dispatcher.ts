@@ -1,7 +1,7 @@
 import type { Env } from "../env.js";
 import type { ApplicationRequest } from "./contracts/index.js";
 import { GENERIC_ERROR_MESSAGE } from "./constants.js";
-import type { ResolvedStore } from "./do-resolver.js";
+import type { ResolvedStore, StoreDurableObjectRpc } from "./do-resolver.js";
 import { deliver } from "./execution-result-adapter.js";
 import { emitTransportLog } from "./observability.js";
 import { normalizeRequest } from "./request-normalizer.js";
@@ -35,6 +35,17 @@ export function scheduleDispatch(
   );
 }
 
+async function confirmTelegramDeliveryWithRetry(
+  stub: StoreDurableObjectRpc,
+  updateId: number,
+): Promise<void> {
+  try {
+    await stub.confirmTelegramDelivery(updateId);
+  } catch {
+    await stub.confirmTelegramDelivery(updateId);
+  }
+}
+
 async function dispatchPipeline(
   env: Env,
   resolved: ResolvedStore,
@@ -45,10 +56,44 @@ async function dispatchPipeline(
 ): Promise<void> {
   try {
     const result = await resolved.stub.handleApplicationRequest(applicationRequest);
+
+    const hadOutbound =
+      result.status === "ok" &&
+      (result.messages.length > 0 || result.attachments.length > 0);
+
     await deliver(result, {
       chatId: supported.chatId,
       replyToMessageId: supported.messageId,
     }, env.BOT_TOKEN);
+
+    if (hadOutbound) {
+      try {
+        await confirmTelegramDeliveryWithRetry(
+          resolved.stub,
+          applicationRequest.transport.updateId,
+        );
+      } catch {
+        emitTransportLog({
+          layer: "transport",
+          workerRequestId: dispatchContext.workerRequestId,
+          updateId: supported.updateId,
+          messageId: supported.messageId,
+          chatId: supported.chatId,
+          storeId,
+          durableObjectId: resolved.durableObjectId,
+          durationMs: Date.now() - dispatchContext.startTime,
+          resultStatus: "error",
+          inboundKind: supported.inboundKind,
+          errorCode: "ConfirmDeliveryFailed",
+        });
+        return;
+      }
+    }
+
+    const skippedDelivery =
+      result.status === "ok" &&
+      result.messages.length === 0 &&
+      result.attachments.length === 0;
 
     emitTransportLog({
       layer: "transport",
@@ -59,7 +104,7 @@ async function dispatchPipeline(
       storeId,
       durableObjectId: resolved.durableObjectId,
       durationMs: Date.now() - dispatchContext.startTime,
-      resultStatus: "success",
+      resultStatus: skippedDelivery ? "skipped_delivery" : "success",
       inboundKind: supported.inboundKind,
     });
   } catch (error) {

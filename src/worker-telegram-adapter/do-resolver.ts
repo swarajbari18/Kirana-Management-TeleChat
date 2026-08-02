@@ -3,6 +3,7 @@ import type { ApplicationRequest, ExecutionResult } from "./contracts/index.js";
 
 export interface StoreDurableObjectRpc {
   handleApplicationRequest(request: ApplicationRequest): Promise<ExecutionResult>;
+  confirmTelegramDelivery(updateId: number): Promise<void>;
 }
 
 export interface ResolvedStore {
