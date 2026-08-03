@@ -1,6 +1,6 @@
 ---
 name: Component 4 Harness
-overview: "Component 4 completes the orchestration harness on the existing My Shop Profile (MSP) capability: full GO strategic loop, dependency-aware execution engine, agent trace persistence, BC parameter grounding, hybrid faithfulness verification, and profile change history — validated in production via deploy, live Telegram, SQLite reconstruction, and wrangler tail observability."
+overview: "Component 4 completes the orchestration harness on the existing My Shop Profile (MSP) capability: full GO strategic loop, dependency-aware execution engine, agent trace persistence, BC parameter grounding, Layer 3 faithfulness gate (respond path), and profile change history — validated in production. Faithfulness design superseded by Component 4.1 (grounded response + binding verifier; no NL claim extractor)."
 todos:
   - id: schema-migration
     content: Add agent_trace_events + shop_profile_history tables via Drizzle; drizzle-kit generate
@@ -24,7 +24,7 @@ todos:
     content: MSP harness retry, parameter grounding, re-invoke context (objective + prior plan + prior results), nested trace events
     status: pending
   - id: faithfulness
-    content: "Hybrid faithfulness: schema-validated claim extraction + deterministic matcher + regen cap"
+    content: "Layer 3 faithfulness gate on respond path — superseded by Component 4.1 (grounded response + bindings; see component_4.1_fixes plan)"
     status: pending
   - id: profile-history
     content: shop_profile_history writes on post-confirmation applied tool success only
@@ -78,6 +78,8 @@ isProject: false
 
 
 **Explicit non-goals (deferred):** Inventory capability (C5), multi-capability group planning, Cloudflare Queues, DO eviction resume/checkpoint recovery, `queries.csv` edits, `complete_autonomy` UX exposure (tool exists when user explicitly asks).
+
+> **Faithfulness supersession (Component 4.1):** Part 8 of this plan originally specified a **hybrid NL faithfulness** path (response LLM → claim-extractor LLM → deterministic matcher). Production testing proved that design regresses accuracy and latency. **Authoritative faithfulness design:** [component_4.1_fixes_c4706af8.plan.md](component_4.1_fixes_c4706af8.plan.md) — single **Grounded Response** LLM call (display lines + fact bindings) + code-only binding verifier. Do not implement Part 8 §8.2–8.4 or Part 4A.5 as written below.
 
 ---
 
@@ -157,7 +159,7 @@ Validate in production that:
 - **Execution engine** runs the **entire plan as one interaction** (dependency-aware); it **never** invokes Decision Mode
 - **Decision Mode** runs **once** after the full execution phase — judges whether **business intent** is met
 - **Agent trace events** persist every harness step with full LLM invocation context + output + tokens + reasoning (trace-only)
-- **Faithfulness verification** gates factual responses (hybrid: schema-validated claim extraction + deterministic matching)
+- **Faithfulness verification** gates factual responses on the respond path (see C4.1: grounded response + binding verifier — not NL claim extraction)
 - **BC parameter grounding** reduces hallucinated tool parameters before execution
 - **Profile change history** audits post-confirmation applied writes
 - Engineers reconstruct any run from SQLite alone — `wrangler tail` optional for harness steps
@@ -263,7 +265,7 @@ Only **scope** differs: GO assigns objectives to capabilities; BC assigns operat
 | ----------------------------------- | --------------------------------------------- | ---------------------- | ------------------------------------------ |
 | **Layer 1 — Plan verification**     | Is the execution plan valid?                  | GO code                | Before execution                           |
 | **Layer 2 — Business verification** | Did the business operation execute correctly? | BC / tools             | During/after tool execution                |
-| **Layer 3 — Faithfulness**          | Does NL response match verified facts?        | GO faithfulness module | After response generation, before delivery |
+| **Layer 3 — Faithfulness**          | Does NL response match verified facts?        | GO **Grounded Response** component (generation + binding verify — one bounded unit per C4.1) | Respond path, before delivery |
 
 
 **GO execution engine does NOT perform Layer 2.** It collects `CapabilityResult` and traces step completion.
@@ -458,7 +460,7 @@ Every caught error: L2 trace event + explicit structured log + `execution_ledger
 | Denied path               | Hardcoded string in `orchestrate.ts`        | Response Mode grounded on `denied` status                      |
 | `MAX_GO_GEMINI_ROUNDS`    | Misused for plan-verify retry               | Strategic loop cap only; split `MAX_GO_PLAN_VERIFY_RETRIES`    |
 | Agent trace               | Table exists; not written at runtime        | Every harness step → L2                                        |
-| Faithfulness              | Absent                                      | Hybrid Layer 3 on respond path                                 |
+| Faithfulness              | Absent                                      | Layer 3 on respond path (C4.1: grounded response + bindings)   |
 | Parameter grounding       | Absent                                      | Pre-tool deterministic checks                                  |
 | Profile history           | Absent                                      | Post-confirm applied writes                                    |
 | GO errors                 | Silent `catch`                              | Trace + log + ledger                                           |
@@ -552,7 +554,9 @@ FUNCTION orchestrate(ctx, ports, db, runContext):
     IF decision.action == "respond":
       text = CALL generateResponse(..., mode=RESPOND)
       TRACE(LLM_INVOCATION go_response)
-      text = faithfulnessGate(text, runContext.verifiedFactsFlat(), runContext)
+      grounded = generateGroundedResponse(ctx, runContext, phaseResult)  // C4.1: JSON lines + bindings
+      verified = verifyGroundedResponse(grounded, runContext)             // code-only binding verifier
+      text = verified.displayText
       RETURN deliver(text)
 
   TRACE(ORCHESTRATION_ERROR, reason=strategic_cap_exceeded)
@@ -674,9 +678,8 @@ Each LLM step: **minimal constitutional `system_instruction`** + engineered `con
 | **GO Planning (strategic replan)** | **Same 4A.1** | §2.11a: conversation + **business intent** + prior plan + all results + facts + **prior Decision rationale** + replan history | Verifier diagnostics |
 | **GO Planning (harness retry)** | **Same 4A.1** | §2.11b: conversation + verifier diagnostics + invalid plan attempt | Decision artifact |
 | **GO Decision** | Part 4A.2 | **Business intent**; **plan artifact** (objectives+capabilities — already reasoned); plan verify outcome; **all** objective results; verified facts; prior Decision/replan history | Raw tool I/O; re-deriving objectives |
-| **GO Response (respond)** | Part 4A.3 | Verified facts; denied statuses; owner instructions | Plans |
+| **GO Grounded Response (respond)** | C4.1 Part 4A.2 | Fact catalog; outcome catalog; verified context; owner instructions | Plans; invented factIds |
 | **GO Response (clarify)** | Part 4A.4 | Aggregated `clarification_needed`; optional completed acks | Raw JSON diagnostics |
-| **GO Faithfulness extract** | Part 4A.5 | Response text only | Conversation |
 | **BC Planning (first invoke)** | Part 4A.6 | Objective; inbound; profile | GO internals |
 | **BC Planning (re-invoke)** | **Same 4A.6** | §2.10: objective + prior tool plan + prior results | Full GO trace |
 
@@ -776,20 +779,9 @@ Do NOT expose internal JSON or error codes. Do NOT invent business values.
 Output plain text only.
 ```
 
-### 4A.5 GO Faithfulness — claim extractor
+### ~~4A.5 GO Faithfulness — claim extractor~~ (REMOVED — superseded by C4.1)
 
-```text
-You are the Faithfulness Extractor.
-
-Extract factual claims from the assistant response as JSON:
-{
-  "claims": [
-    { "text": "...", "entity": "shop|...", "attribute": "gstin|...", "value": "..." }
-  ]
-}
-If no factual claims, return { "claims": [] }.
-Use only these schema keys. Output valid JSON only.
-```
+Do **not** implement. NL claim extraction after response generation was removed because a second LLM pass on natural language **regresses** grounding accuracy (re-parses prose probabilistically) instead of improving it. See [component_4.1_fixes_c4706af8.plan.md](component_4.1_fixes_c4706af8.plan.md) Part 4A.2 **Grounded Response** constitution.
 
 ### 4A.6 BC Planning (MSP — identical for first invoke and re-invoke)
 
@@ -935,7 +927,7 @@ Trace `output.reasoning` enables comparing model thinking across prompt changes 
 
 ```text
 payload:
-  step: go_plan | go_decision | go_response | go_faithfulness_extract | bc_plan
+  step: go_plan | go_decision | go_grounded_response | bc_plan
   model: GEMINI_MODEL constant
   invocation:
     systemInstruction: string
@@ -975,10 +967,9 @@ If model returns unexpected tool-call-shaped content despite JSON mode, store ra
 | `CONFIRMATION_REQUESTED`        | capability   | Tool sent buttons                             |
 | `CONFIRMATION_RESOLVED`         | capability   | Callback resolved                             |
 | `DECISION`                      | go           | Decision artifact                             |
-| `RESPONSE_GENERATED`            | go           | Response text before/after faithfulness       |
-| `FAITHFULNESS_EXTRACT`          | faithfulness | Claim JSON                                    |
-| `FAITHFULNESS_VERIFIED`         | faithfulness | Passed                                        |
-| `FAITHFULNESS_FAILED`           | faithfulness | Failed attempt                                |
+| `RESPONSE_GENERATED`            | go           | GroundedResponse JSON (lines + bindings) before delivery |
+| `FAITHFULNESS_VERIFIED`         | faithfulness | Binding verification passed |
+| `FAITHFULNESS_FAILED`           | faithfulness | Binding failure (lineIndex, factId, expected, asShown) |
 | `ORCHESTRATION_ERROR`           | go           | Uncaught error                                |
 
 
@@ -1039,12 +1030,13 @@ Modify [executeCapabilityPlan](src/global-orchestrator/execution-engine/index.ts
 
 ---
 
-## Part 8 — Faithfulness Verification (Layer 3)
+## Part 8 — Faithfulness Verification (Layer 3) — SUPERSEDED BY COMPONENT 4.1
 
-Per §6.10: **after response generation, before Telegram delivery.** Never re-execute business operations.
+> **Do not implement this section as written.** It documents the original C4 intent and why it was abandoned. **Authoritative spec:** [component_4.1_fixes_c4706af8.plan.md](component_4.1_fixes_c4706af8.plan.md).
 
-### 8.1 Architecture failure modes (must detect)
+Per §6.10: **on the respond path, before Telegram delivery.** Never re-execute business operations.
 
+### 8.1 Failure modes (still valid — detected by binding verifier)
 
 | Mode                            | Example                                      |
 | ------------------------------- | -------------------------------------------- |
@@ -1053,61 +1045,43 @@ Per §6.10: **after response generation, before Telegram delivery.** Never re-ex
 | Hallucinated generalisation     | "All bills done" when one bill finalized     |
 | Unsupported inference           | Conclusions beyond deterministic evidence    |
 
+### 8.2 ~~Pipeline (natural language)~~ — REPLACED
 
-### 8.2 Pipeline (natural language)
-
-```text
-FUNCTION faithfulnessGate(responseText, canonicalFacts, runContext):
-
-  FOR attempt IN 1..MAX_CLAIM_EXTRACTION_RETRIES:
-    claimsJson = LLM extract (constitution 4A.5)
-    TRACE(FAITHFULNESS_EXTRACT)
-    IF schemaValid(claimsJson):
-      BREAK
-    feed schema errors back to extractor contents as next user turn in same step OR new invocation
-
-  FOR regen IN 1..MAX_FAITHFULNESS_REGEN:
-    unsupported = deterministicMatcher(claimsJson.claims, canonicalFacts)
-    IF unsupported.empty:
-      TRACE(FAITHFULNESS_VERIFIED)
-      RETURN responseText
-
-    TRACE(FAITHFULNESS_FAILED, unsupported)
-    responseText = regenerateResponse(with diagnostics listing unsupported claims)
-    // re-extract claims for new text
-
-  RETURN SAFE_FALLBACK_MESSAGE  // e.g. "I completed your request but cannot summarize details right now. Please check your profile or try again."
-```
-
-### 8.3 Canonical fact normalization (MSP)
+**C4.1 pipeline:**
 
 ```text
-FOR EACH completed CapabilityResult:
-  FOR EACH key in verifiedFacts:
-    MAP to canonical entry:
-      shop.shop_name ← shopName
-      shop.owner_name ← ownerName
-      shop.gstin ← gstin
-      shop.gst_registered ← gstRegistered
-      shop.instructions ← instructions array
-      source = my_shop_profile
+FUNCTION verifyGroundedResponse(grounded, factRegistry, runContext):
+
+  IF NOT schemaValid(grounded): harness retry schema correction (capped)
+
+  failures = verifyBindings(grounded.lines, factRegistry)   // CODE ONLY — no LLM
+
+  IF failures.empty:
+    TRACE(FAITHFULNESS_VERIFIED)
+    RETURN concat(grounded.lines[].display)
+
+  TRACE(FAITHFULNESS_FAILED, failures)
+  IF regen < MAX_FAITHFULNESS_REGEN:
+    grounded = regenerateGroundedResponse(with line-level diagnostics)
+    RETRY verifyBindings
+  RETURN SAFE_FALLBACK_MESSAGE
 ```
 
-### 8.4 Deterministic matcher
+**Generation** happens in **one LLM call** (`generateGroundedResponse`): each line includes `display` + `bindings` citing `factId` from the Verified Fact Registry. The model **publishes** evidence at write time — the harness does not re-extract claims from NL.
 
-```text
-FOR EACH claim IN claims:
-  IF claim.entity/attribute not in alias map: FAIL claim
-  IF normalize(claim.value) != normalize(fact.value) for matched attribute: FAIL claim
-  IF claim references entity with no fact row: FAIL claim
-RETURN list of unsupported claims
-```
+**Why the old hybrid path was removed:** Response LLM → claim-extractor LLM → matcher chains two probabilistic NL steps. Production ([agent trace.csv](agent%20trace.csv)) showed correct responses rejected (alias/boolean mismatch) and ~26s wasted latency. Additional LLM calls on NL **regress** accuracy; grounding must stay in a **single bounded component** (see [system_Architecture.md](docs/system_Architecture.md) Layer 3).
 
-**Spike decision:** If normalization insufficient for C4, document in implementation notes — prefer deterministic match; LLM-as-judge only as last resort with human approval.
+### 8.3 Verified Fact Registry (replaces flat canonical normalization)
+
+See C4.1 Part 3. Harness builds `VerifiedFactRecord` map from `CapabilityResult.verifiedFacts` with stable `factId` per citeable field (MSP: shopName, gstin, …; inventory: per-SKU quantity, etc.).
+
+### 8.4 ~~Deterministic matcher on extracted claims~~ — REPLACED
+
+Binding verifier: for each line binding, `factId` + `field` + `asShown` matched against registry (with `valuesMatch` normalization for booleans, etc.). Product–quantity relationships verified via **SKU-specific factId**, not isolated numbers.
 
 ### 8.5 Denied status
 
-Response may acknowledge denial in NL. Matcher checks **factual claims about business state** only — not "you declined" meta-statements.
+Outcome bindings for denial lines — not `verifiedFacts`. See C4.1 Part 3.4.
 
 ---
 
@@ -1184,8 +1158,8 @@ Each constant **must have a block comment** stating purpose and what it does **N
 | `MAX_GO_PLAN_VERIFY_RETRIES`      | Harness retries when GO capability **plan verification** fails structurally               | Strategic replan rounds         |
 | `MAX_BC_TOOL_PLAN_VERIFY_RETRIES` | Harness retries when BC **tool plan verification** or parameter grounding triggers replan | GO strategic loop               |
 | `MAX_GO_GEMINI_ROUNDS`            | **Strategic** GO cycles: plan→execute→decide including replan                             | Harness verify retries          |
-| `MAX_FAITHFULNESS_REGEN`          | Response regeneration after unsupported claims                                            | Claim extraction schema retries |
-| `MAX_CLAIM_EXTRACTION_RETRIES`    | Schema correction when faithfulness extractor JSON invalid                                | Faithfulness regen              |
+| `MAX_FAITHFULNESS_REGEN`          | Grounded response regeneration after binding verification fails (C4.1)                    | Schema retries on invalid JSON |
+| ~~`MAX_CLAIM_EXTRACTION_RETRIES`~~ | **Removed in C4.1** — no NL claim-extractor LLM                                         | —                              |
 | `GENERIC_ORCHESTRATION_ERROR`     | User-facing terminal error string                                                         | —                               |
 
 
@@ -1271,8 +1245,7 @@ curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:g
 | `execution-engine/dependency-scheduler.test.ts` | Skip blocked deps; independents when sibling clarifies; O1/O2/O3 scenario |
 | `execution-engine/plan-verification.test.ts`    | Extend existing                                                           |
 | `my-shop-profile/parameter-grounding.test.ts`   | GSTIN; name substring; instruction                                        |
-| `faithfulness/claim-schema.test.ts`             | Invalid keys rejected                                                     |
-| `faithfulness/fact-matcher.test.ts`             | Unsupported + attribute mismatch                                          |
+| `faithfulness/binding-verifier.test.ts`         | BV-* catalog per C4.1 plan                                                |
 | `agent-trace-repository.test.ts`                | seq monotonic; parent nesting                                             |
 | `global-orchestrator/constants.test.ts`         | All constants exist; distinct purposes                                    |
 
@@ -1325,7 +1298,7 @@ Bullets for future full matrix:
 
 - Multi-objective: independent clarification + completed sibling → aggregated clarify
 - Strategic replan: read then update in two GO rounds
-- Faithfulness regen on verbose response
+- Grounded response binding failure + regen (C4.1)
 - Parameter grounding harness retry chain
 - Profile history across sequential updates
 - Multi-capability (post-C6)
@@ -1372,7 +1345,7 @@ Each iteration:
 | ONB-016 | PLAN → clarification_needed → DECISION clarify → RESPONSE (no faithfulness matcher on pure ask)  | `gstin` unchanged                          |
 | ONB-011 | TOOL_PLAN or grounding fail → clarify or harness retry traces                                    | `gstin` unchanged                          |
 | ONB-017 | CONFIRMATION_RESOLVED denied → DECISION respond                                                  | profile unchanged; no history              |
-| ONB-018 | read path → respond → faithfulness on factual GSTIN claim                                        | answer matches `shop_profile.gstin`        |
+| ONB-018 | read path → respond → grounded bindings on GSTIN factId → FAITHFULNESS_VERIFIED (first pass)     | answer matches `shop_profile.gstin`        |
 
 
 ---
@@ -1417,14 +1390,14 @@ Update [docs/agent-traceability-and-agent-state.md](docs/agent-traceability-and-
 | AC-11 | Errors: trace + log + ledger                          | Induced failure      |
 
 
-### 19.3 Faithfulness
+### 19.3 Faithfulness (implement per C4.1)
 
 
 | #     | Criterion                        | Verification          |
 | ----- | -------------------------------- | --------------------- |
-| AC-12 | After response, before delivery  | Stage order           |
-| AC-13 | Claim schema loop                | Unit test             |
-| AC-14 | Regen cap + fallback             | Trace                 |
+| AC-12 | Respond path: grounded response + binding verify before delivery | Stage order           |
+| AC-13 | No NL claim-extractor LLM on respond path | Trace (no FAITHFULNESS_EXTRACT) |
+| AC-14 | Binding regen cap + fallback             | Trace                 |
 | AC-15 | No business re-execution on fail | `shop_profile` stable |
 
 
@@ -1473,7 +1446,7 @@ Update [docs/agent-traceability-and-agent-state.md](docs/agent-traceability-and-
 - [ ] No `continue` action — Decision is `replan` | `clarify` | `respond` only
 - [ ] Strategic replan Planning context includes Decision rationale (§2.11a); harness retry uses verifier only (§2.11b)
 - [ ] Clarification terminal; confirmation await same work item
-- [ ] Faithfulness respond-path only
+- [ ] Faithfulness: C4.1 grounded response + bindings (no NL extractor)
 - [ ] L1/L2/L3 correct; no resume
 
 ### 20.2 Observability
@@ -1550,7 +1523,7 @@ This plan revision explicitly addresses alignment-conversation items:
 - D1–D7 context engineering (Part 4, 4A, §2.11)
 - E1–E10 clarification/confirmation (§2.6, Appendix C, Part 9.2)
 - F1–F11 trace/RunContext (Part 6, 5.1)
-- G1–G9 faithfulness (Part 8)
+- G1–G9 faithfulness (C4.1 Part 8 / binding verifier)
 - H1–H6 BC grounding (Part 9)
 - I1–I4 profile history (Part 10)
 - J1–J3 constants (Part 11)

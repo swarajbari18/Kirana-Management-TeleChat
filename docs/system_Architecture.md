@@ -82,11 +82,10 @@ AI engineering here covers **only** the bounded places where a language model pr
 |--------------|--------------|----------|
 | Capability execution plan JSON | GO Planning | Global Orchestrator |
 | Decision JSON (`replan` \| `clarify` \| `respond`) | GO Decision | Global Orchestrator |
-| Grounded natural-language response | GO Response | Global Orchestrator |
-| Factual-claim extraction JSON | Faithfulness (pre-delivery) | Global Orchestrator |
+| Grounded response JSON (display lines + fact bindings) | GO Grounded Response (single bounded component — generation + faithfulness) | Global Orchestrator |
 | Tool operation plan JSON | BC Planning | Business Capability |
 
-Everything else — transport, persistence, tool dispatch, plan verification, dependency scheduling, confirmation UI, faithfulness matching, trace persistence, Telegram delivery — is **deterministic software engineering**.
+Everything else — transport, persistence, tool dispatch, plan verification, dependency scheduling, confirmation UI, **binding verification** (deterministic, inside Grounded Response boundary), trace persistence, Telegram delivery — is **deterministic software engineering**.
 
 The LLM never:
 
@@ -129,7 +128,7 @@ Includes:
 - phase transitions and gates,
 - plan verification (Layer 1), capability/tool dispatch, execution engine,
 - tool-owned confirmation (`pending_confirmations`, `callback_query`),
-- faithfulness verification (Layer 3) before delivery,
+- faithfulness verification (Layer 3, respond path only) before delivery — implemented as **one bounded component** with response generation (see Layer 3 below),
 - agent trace persistence,
 - structured observability logs,
 - idempotency and ledger.
@@ -3450,17 +3449,15 @@ Execution terminates and response generation begins.
 
 
 
-### Stage 9 — Faithfulness Verification
+### Stage 9 — Grounded Response and Faithfulness (single bounded component)
 
-Once a response has been generated, the orchestrator performs a final faithfulness verification.
+On the **respond** path, response generation and faithfulness verification are **not separate LLM steps**. They form one architectural component: **Grounded Response**.
 
-Every factual claim contained within the response is compared against the verified business facts collected during execution.
+The language model produces a structured artifact: ordered `display` lines, each with **evidence bindings** (`factId`, `field`, `asShown`) pointing at the **Verified Fact Registry** built from tool results. Deterministic code then schema-validates the artifact and **verifies bindings** against the registry before any text is delivered.
 
-Unsupported claims are rejected.
+Unsupported or unbound factual lines trigger regeneration (capped) or a safe fallback. Business execution is never repeated solely because response grounding failed.
 
-If verification fails, the response is regenerated using the same verified business facts.
-
-Business execution is never repeated solely because response generation failed.
+**Clarify** path: plain natural-language question only — no binding verification (no verified facts to cite).
 
 ---
 
@@ -4526,28 +4523,51 @@ Only verified business evidence leaves the capability boundary.
 
 
 
-# Layer 3 — Faithfulness Verification
+# Layer 3 — Faithfulness Verification (Grounded Response)
 
-Faithfulness Verification occurs immediately before the response is returned to the owner.
+Faithfulness verification ensures that the natural language delivered to the owner is supported by verified business facts from deterministic execution.
 
-Its purpose is to ensure that the natural language response contains only information supported by verified business facts.
-
-Unlike Business Verification, this layer validates language rather than business state.
+Unlike Business Verification, this layer validates **language grounding** rather than business state mutation.
 
 ---
 
+### Architectural boundary — one component, not two LLM steps
 
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  GROUNDED RESPONSE (single bounded component)                 │
+│                                                             │
+│  ┌─────────────────────┐    ┌─────────────────────────────┐ │
+│  │ LLM (one call)      │    │ Deterministic harness       │ │
+│  │ GroundedResponse    │───▶│ schema validate             │ │
+│  │ lines + bindings    │    │ verifyBindings(registry)    │ │
+│  └─────────────────────┘    │ regen (capped) / fallback   │ │
+│                             │ concat display → deliver    │ │
+│                             └─────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Verification Strategy
+**Response generation and faithfulness verification for natural language must live inside this single boundary.**
 
-Faithfulness verification is **hybrid**:
+The model **publishes** evidence bindings at write time (like research citations to fact IDs). The harness verifies those bindings in code. The owner sees only concatenated `display` lines.
 
-1. **Claim extraction** — the language model extracts factual claims from the generated response into a **fixed JSON schema** (entity, attribute, value, text).
-2. **Schema validation** — deterministic code verifies the extraction JSON shape. Malformed extractions trigger a **schema correction loop** (retry extraction with diagnostics) — distinct from unsupported-claim failures.
-3. **Deterministic matching** — each validated claim is compared against a **normalized verified-facts store** built from `CapabilityResult.verifiedFacts` (SQLite business truth from completed objectives only).
-4. **Regeneration** — unsupported claims trigger response regeneration (capped); business execution is never repeated.
+**Do not** chain a second language-model pass to extract or reinterpret claims from generated prose. Production experience showed that NL → LLM extractor → matcher **regresses** accuracy (false rejections of correct responses, product–value alias errors, added latency) instead of improving it. Faithfulness is not improved by stacking more probabilistic steps on natural language; it is improved by **one** generation step that cites tool-sourced facts, plus **deterministic** verification.
 
-`denied` outcomes (`{ status, reason }`) inform response tone but are **not** verified facts for claim matching.
+Implementation specification: [component_4.1_fixes plan](.cursor/plans/component_4.1_fixes_c4706af8.plan.md). Knowledge base for tool authors: `docs/verified-facts-and-grounded-response.md` (created in C4.1).
+
+---
+
+### Verification strategy
+
+1. **Verified Fact Registry** — harness builds stable `factId` records from `CapabilityResult.verifiedFacts` (per tool, per citeable field; for inventory, per SKU and attribute such as quantity).
+2. **Grounded generation** — one LLM call outputs `lines[]` with `display` and `bindings` citing catalog `factId`s only.
+3. **Schema validation** — deterministic code validates JSON shape (harness retry if malformed).
+4. **Binding verification** — for each binding: `factId` exists, `field` matches, `asShown` matches registry value (with type-aware normalization, e.g. boolean Yes/true). Product–quantity relationships are verified via **SKU-specific factId**, not isolated numbers.
+5. **Regeneration** — binding failures trigger grounded response regeneration with line-level diagnostics (capped); business execution is never repeated.
+
+`denied` outcomes (`{ status, reason }`) use **outcome bindings**, not verified facts.
+
+**Explicitly rejected design:** hybrid faithfulness via post-hoc **claim extraction** from NL (response LLM → extractor LLM → matcher). That pattern is not part of this architecture.
 
 ---
 
@@ -4620,27 +4640,25 @@ Only deterministic evidence may appear in the final response.
 
 
 
-### Faithfulness Failure Handling
+### Faithfulness failure handling
 
-If faithfulness verification fails:
+If binding verification fails:
 
 - business execution is **not** repeated,
 - verified business facts remain unchanged,
-- the response is regenerated (up to a configured cap),
-- verification is performed again.
-
-**Two failure modes:**
+- the **grounded response** is regenerated (up to a configured cap),
+- binding verification runs again (code only).
 
 | Mode | Cause | Recovery |
 |------|-------|----------|
-| **Malformed extraction** | Claim JSON has wrong keys or shape | Schema correction loop (re-extract) |
-| **Unsupported claims** | Valid extraction but claim not in verified facts | Response regeneration |
+| **Malformed JSON** | GroundedResponse schema invalid | Schema correction / regen |
+| **Binding failure** | factId, field, or asShown mismatch vs registry | Grounded response regen with line diagnostics |
 
-Only response generation is retried.
+Only the Grounded Response component is retried — not business capabilities.
 
-Business execution remains deterministic.
+Gemini thinking/reasoning during grounded response generation is stored in **agent trace only**, not in subsequent context.
 
-Gemini thinking/reasoning during faithfulness steps is stored in **agent trace only**, not in subsequent context.
+**There is no separate faithfulness-extractor LLM step.**
 
 ---
 
@@ -4673,15 +4691,12 @@ Verified Business Facts
 
 ↓
 
-Response Generation
-
-↓
-
-Faithfulness Verification
-
-↓
-
 Grounded Response
+(generation + binding verify — one component)
+
+↓
+
+Grounded Response Delivered
 ```
 
 Every execution must successfully pass all three verification layers.
@@ -4700,7 +4715,7 @@ The Verification Architecture is governed by the following principles.
 - Every verification stage is deterministic.
 - Verification always operates on evidence rather than assumptions.
 - Business truth is established only through Business Verification.
-- Natural language is validated independently through Faithfulness Verification.
+- Natural language grounding is validated through **binding verification** inside the Grounded Response component — not by a separate NL reinterpretation step.
 - Failed verification never silently proceeds.
 - Verification failures always produce structured diagnostics.
 - Every response delivered to the owner is fully grounded in verified business facts.
@@ -6582,7 +6597,7 @@ Conversation turns persist only final assistant output to the owner.
 
 ### Component status
 
-Component 3 validated the harness in memory with manual production testing. Component 4 implements full `agent_trace_events` persistence, dependency-aware execution, faithfulness verification, and profile change history. Specification: [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md). Goal document: [component_4_harness plan](.cursor/plans/component_4_harness_dbafc641.plan.md).
+Component 3 validated the harness in memory with manual production testing. Component 4 implements full `agent_trace_events` persistence, dependency-aware execution, and profile change history. **Faithfulness (Layer 3)** is specified as the **Grounded Response** bounded component (C4.1) — not NL claim extraction. Specification: [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md). Goal documents: [component_4_harness plan](.cursor/plans/component_4_harness_dbafc641.plan.md), [component_4.1_fixes plan](.cursor/plans/component_4.1_fixes_c4706af8.plan.md).
 
 ---
 
