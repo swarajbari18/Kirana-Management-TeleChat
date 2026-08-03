@@ -47,7 +47,7 @@ isProject: false
 | Production-first development | lines 5853–5878, 5920–6110 |
 | Component acceptance checklist | lines 6051–6064 |
 | Engineering Methodology | Chapter 15 (lines 8717+) |
-| Agent traceability & auditability | [docs/agent-traceability.md](docs/agent-traceability.md) — C3 schema groundwork; C4 full implementation |
+| Agent traceability & agent state | [docs/agent-traceability-and-agent-state.md](docs/agent-traceability-and-agent-state.md) — C3 schema groundwork; C4 full implementation |
 | Runtime stack (Gemini, Agents SDK note) | §6.17 (~6110+) — **we compose without Agents SDK fibers per alignment** |
 
 **Builds on:**
@@ -862,7 +862,7 @@ Index on `status` where awaiting (query active confirmation for store).
 
 ### 5.4 `orchestration_checkpoints` (optional but recommended)
 
-> **Component 3 status:** table created, **not written at runtime**. Full agent trace persistence is a **Component 4 requirement** — see [docs/agent-traceability.md](docs/agent-traceability.md).
+> **Component 3 status:** table created, **not written at runtime**. Full agent trace persistence is a **Component 4 requirement** — see [docs/agent-traceability-and-agent-state.md](docs/agent-traceability-and-agent-state.md).
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -1396,7 +1396,7 @@ Each iteration:
 
 ## Part 17 — Carry Forward to Component 4
 
-- **Agent traceability & auditability (required)** — see [docs/agent-traceability.md](docs/agent-traceability.md)
+- **Agent traceability & agent state (required)** — see [docs/agent-traceability-and-agent-state.md](docs/agent-traceability-and-agent-state.md)
   - Component 3 defers full persistence; C4 must implement it
   - Persist ordered trace events for every run: GO capability plan, plan verification, capability execution, MSP tool plan, tool verification, each tool invocation + output, GO decision + response
   - Evolve `orchestration_checkpoints` into append-only `agent_trace_events` (or dual-write: events for audit + latest snapshot for resume)

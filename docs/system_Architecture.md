@@ -931,6 +931,22 @@ Examples:
 
 Conversation state supports reasoning only and is never considered business truth.
 
+Conversation state is the **product I/O boundary**: what the shop owner said and the final assistant reply. It must not be confused with agent state (see §6.18).
+
+---
+
+
+
+### Agent State
+
+Versioned trace of what the orchestration **harness** did during one run: plans, verification outcomes, capability invocations, tool steps, decisions, and replans.
+
+Agent state is **not** the Telegram transcript. It is the engineering evidence that answers why the agent planned, executed, and decided as it did. Verified business facts are consequences of execution; replanning requires the **plan artifact** plus results to detect intent gaps.
+
+Agent state is append-only within a run (`update_id` / `correlation_id`), may nest Business Capability sub-traces under Global Orchestrator events, and is persisted for audit and replay — not written into `conversation_turns` mid-loop.
+
+Full definition: [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md).
+
 ---
 
 
@@ -2401,6 +2417,20 @@ This architecture deliberately minimizes the amount of responsibility owned by t
 Once the language model has completed a reasoning step, deterministic software takes over wherever possible.
 
 The system therefore combines adaptive reasoning with deterministic execution instead of allowing the language model to control the entire execution lifecycle.
+
+### Harness, not reasoning engine
+
+The Global Orchestrator is implemented as a **harness** (TypeScript control loop), not as a monolithic LLM agent that owns phase transitions.
+
+| Responsibility | Owner |
+|----------------|-------|
+| Loop order: REASON → VERIFY → EXECUTE → DECIDE → RESPOND | Deterministic code (`orchestrate()`, capability handlers) |
+| Structured plan JSON, decision JSON, final natural language | Language model at bounded steps |
+| Plan verification, capability/tool dispatch, gates | Deterministic code |
+
+The LLM does not decide when to verify or execute. Code does. That separation is what makes orchestration **measurable and improvable**. Agent state records each harness transition so engineers can reconstruct the full run without reproducing it (see §6.18).
+
+Each LLM step uses a **minimal system message** — a constitutional slice for that phase (planner, decision, response), not a long instruction manual. Steps share the same **orchestration context** (turns, profile, inbound) as live input; they do not share one multi-turn Gemini thread with swapped system prompts.
 
 ---
 
@@ -5149,6 +5179,10 @@ Adaptive reasoning must expose:
 
 Together these form the complete execution history.
 
+**Agent state** is the persisted, versioned representation of that history for one orchestration run. It is distinct from **conversation state** (owner-facing turns only). Layers 2–4 below are agent-state concerns; Layer 1 includes correlation metadata that ties agent events to a request.
+
+See [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md) for the full contrast, event model, and Component 4 requirements.
+
 ---
 
 
@@ -6222,7 +6256,7 @@ Execution Terminates
 
 The orchestrator exists only for the duration of a single execution cycle.
 
-No execution-specific state survives after the orchestration cycle completes.
+No **in-memory** execution-specific state survives after the orchestration cycle completes. **Persisted agent state** (trace events, optional checkpoints) does survive in SQLite for audit, replay, and cross-message resume — see §6.18.
 
 Persistent information remains inside the Durable Object.
 
@@ -6346,6 +6380,86 @@ The Cloudflare Agents SDK provides the adaptive reasoning runtime required by th
 This alignment allows the architecture to preserve clear responsibility boundaries while minimizing distributed systems complexity.
 
 Instead of forcing distributed coordination across multiple servers, every store executes inside its own isolated runtime, allowing the Global Orchestrator to reason over a single, consistent and durable business state throughout the entire orchestration lifecycle.
+
+## 6.18 Agent State
+
+Agent state is the **versioned trace of harness behaviour** during one orchestration run. It is a first-class architectural category, separate from conversation state, business state, and owner state.
+
+### Why agent state exists
+
+The Global Orchestrator is a **harness**, not a reasoning engine that owns its own control loop. TypeScript code enforces phase transitions; the language model produces **artifacts** (plan JSON, decision JSON, grounded response text) at named steps. Without persisted agent state, engineers cannot answer:
+
+- What plan did the agent make before execution?
+- Why did verified facts differ from intent?
+- What did decision mode see when choosing clarify vs respond vs replan?
+- How did nested Business Capability steps (tool plans, confirmations) relate to Global Orchestrator objectives?
+
+Verified business facts alone are **insufficient for replanning**. Replanning compares **planned objectives** to **execution results** and revises strategy. That requires the plan artifact at each version, not only downstream facts.
+
+### Agent state vs conversation state
+
+| | Conversation state | Agent state |
+|---|---|---|
+| **Purpose** | Owner dialogue continuity; product input–output | Harness explainability; audit; replan/decision input |
+| **Audience** | Shop owner; next user message | Engineers; operators; in-run decision/response stages |
+| **Typical contents** | User and final assistant turns | Plans, verifications, invocations, tool I/O, decisions, replan versions |
+| **Updated during loop?** | User turn at start; assistant turn at end only | Append event after each harness transition |
+| **Structure** | Flat chronological turns | Ordered events; nested capability children under GO parents |
+| **Persistence** | `conversation_turns` | `agent_trace_events` (target; C4) |
+| **Business truth?** | No | No — evidence of agency; business truth remains in capability persistence |
+
+Conversation state must **not** be polluted with intermediate plans or decision objects. The owner sees natural language; engineers see the agent trace.
+
+### Live orchestration context vs per-step system messages
+
+During one run, all harness components share **orchestration context** (`OrchestrationContext`): session, conversation turns, owner profile, inbound message, correlation identifiers. This is the live **input** every step reads.
+
+Each language-model step uses a **different minimal system message** — a slice of the orchestration constitution (§6.5) for that phase only: identity of the step, allowed artifact shape, capability or tool catalog. System messages do not re-encode the full constitution or step-by-step loop instructions; **code** owns the loop.
+
+LLM calls are **stateless**: one `system_instruction` and one user payload per call, with context serialized into the user content. Agent state records how outputs evolved across steps; it is not implemented as a single shared Gemini conversation thread.
+
+### Versioned event model
+
+Agent state advances in **monotonic versions** within one `update_id` / `correlation_id`:
+
+```text
+v1  CONTEXT_ASSEMBLED
+v2  CAPABILITY_PLAN          (structured JSON)
+v3  PLAN_VERIFIED            (code gate)
+v4  CAPABILITY_INVOKED       → nested capability trace
+       msp_v1  TOOL_PLAN
+       msp_v2  TOOL_PLAN_VERIFIED
+       msp_v3  TOOL_EXECUTED / CONFIRMATION_*
+v5  DECISION                 (plan + results + action)
+v6  RESPONSE_GENERATED
+```
+
+Replanning appends new plan versions (v7, v8, …) rather than overwriting prior events. Append-only storage in SQLite matches the Durable Object sequential execution model.
+
+Nested Business Capability traces remain **owned by the capability** (observability Layer 3) but are **linked** to Global Orchestrator invocation events via parent references so one query reconstructs the full tree (LangSmith-style run graph).
+
+### Relationship to observability layers
+
+| Observability layer (§6.13) | Agent state content |
+|----------------------------|---------------------|
+| Layer 1 — Request lifecycle | `update_id`, `correlation_id`, duration, terminal status |
+| Layer 2 — Orchestration decisions | Intent, objectives, capability plan, decision outcome |
+| Layer 3 — Capability execution | Tool plans, operations, clarification, capability results |
+| Layer 4 — Verification | Plan accept/reject, gates, verified facts, faithfulness (when implemented) |
+| Layer 5 — Runtime infrastructure | Gemini metadata, latency (optional) |
+
+### Persistence rules
+
+- Runtime memory during a cycle is not authoritative; **persisted agent trace** is.
+- Every harness transition that matters for explainability should append a trace event with `snapshot_json`.
+- Optional latest snapshot (`orchestration_checkpoints`) may support DO eviction resume; audit source of truth remains append-only events.
+- Conversation turns persist only final assistant output to the owner.
+
+### Component status
+
+Component 3 runs the harness in memory; agent state tables exist but are not written at runtime. Component 4 must implement full agent trace persistence. Specification: [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md).
+
+---
 
 # Chapter 7 — Business Capability Architecture
 
@@ -6493,6 +6607,8 @@ The execution philosophy remains identical.
 ## 7.5 Capability Control Loop
 
 Each Business Capability behaves as a small deterministic orchestration engine operating entirely within its own business domain.
+
+Like the Global Orchestrator, each capability is a **harness**: code owns REASON → VERIFY → EXECUTE → VERIFY; the language model produces plan artifacts only. Capability **agent sub-state** (tool plans, verifications, per-tool events) nests under the Global Orchestrator invocation event in the persisted trace (§6.18).
 
 For every assigned business objective, the capability executes the following control loop.
 
@@ -8514,6 +8630,24 @@ Examples include:
 - pending execution references.
 
 Conversation state exists only to reconstruct future execution.
+
+---
+
+
+
+### Agent State
+
+Owned by the observability / runtime trace path (written during orchestration; queried for audit).
+
+Examples include:
+
+- versioned harness events per `update_id`,
+- capability plan and tool plan snapshots,
+- verification outcomes,
+- decision and replan versions,
+- parent–child links to nested capability traces.
+
+Agent state exists to reconstruct **agency** — what the harness did and why — not owner dialogue. See §6.18 and [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md).
 
 ---
 

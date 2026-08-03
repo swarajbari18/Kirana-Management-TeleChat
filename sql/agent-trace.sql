@@ -1,5 +1,6 @@
 -- Agent run trace (chronological)
 -- Replace 261541044 with your update_id from conversation_turns or wrangler tail.
+-- Spec: docs/agent-traceability-and-agent-state.md
 --
 -- LIMITATIONS (today):
 --   GO capability plans, MSP tool plans, verify results, and Gemini outputs are

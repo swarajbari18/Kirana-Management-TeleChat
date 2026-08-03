@@ -9,6 +9,7 @@ Component 1 delivers the **transport boundary**: a Cloudflare Worker that receiv
 | Document | Purpose |
 |----------|---------|
 | [docs/system_Architecture.md](docs/system_Architecture.md) | Full system architecture |
+| [docs/agent-traceability-and-agent-state.md](docs/agent-traceability-and-agent-state.md) | Agent state, traceability, harness model, C4 audit requirements |
 | [docs/goals/component-01-worker-telegram-adapter.md](docs/goals/component-01-worker-telegram-adapter.md) | Component 1 goal document & acceptance criteria |
 | [running.md](running.md) | Deploy, webhook setup, validation, troubleshooting |
 
