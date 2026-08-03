@@ -4,31 +4,31 @@ overview: Component 3 replaces the stub Global Orchestrator with a production-va
 todos:
   - id: worker-handoff-upgrade
     content: Remove ctx.waitUntil from message path; fast-ack handleApplicationRequest; DO alarm/work-queue; TelegramDeliveryService WorkerEntrypoint + service binding; research Cloudflare docs per Part 2.10
-    status: pending
+    status: completed
   - id: schema-repos
     content: Add shop_profile, pending_confirmations, work_queue (+ optional orchestration_checkpoints) via Drizzle schema + repositories; drizzle-kit generate
-    status: pending
+    status: completed
   - id: conversation-extensions
     content: strip-bot-commands for all commands, assistant turn persistence, load ownerProfile into OrchestrationContext
-    status: pending
+    status: completed
   - id: runtime-ports-confirmation
     content: RuntimePorts calling Worker TelegramDeliveryService; waitForConfirmation; DO handleConfirmationCallback; pending_confirmations SQLite + idempotency
-    status: pending
+    status: completed
   - id: worker-callback
     content: Worker callback_query parser/dispatcher, TelegramDeliveryService entrypoint, reply_markup on telegram-client, webhook allowed_updates, ConfirmationCallbackRequest contract
-    status: pending
+    status: completed
   - id: my-shop-profile
     content: "My Shop Profile capability: tool catalog, GST validation, tool-owned confirmation, recursive sub-loop with JSON tool plans"
-    status: pending
+    status: completed
   - id: global-orchestrator
     content: "Real GO: Gemini client, planning/decision/response modes, execution engine, capability registry integration; retire stub"
-    status: pending
+    status: completed
   - id: execution-manager-wire
     content: Wire EM to GO + RuntimePorts via work-processor/alarm; ledger timing; assistant persist after outbound via TelegramDeliveryService
-    status: pending
+    status: completed
   - id: tests-deploy-validate
     content: Colocated unit tests, production integration tests, GEMINI_API_KEY deploy, manual Telegram validation script, human review
-    status: pending
+    status: completed
 isProject: false
 ---
 

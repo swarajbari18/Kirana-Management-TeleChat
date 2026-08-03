@@ -4,34 +4,34 @@ overview: "Component 2 implements the DO Runtime Kernel inside store-durable-obj
 todos:
   - id: drizzle-setup
     content: Add drizzle-orm + drizzle-kit, drizzle.config.ts, wrangler [[rules]] for .sql, persistence/schema.ts; run drizzle-kit generate
-    status: pending
+    status: completed
   - id: persistence-layer
     content: Implement db.ts, migration runner in DO constructor (blockConcurrencyWhile), repositories for store_meta, execution_ledger, conversation_sessions, conversation_turns
-    status: pending
+    status: completed
   - id: conversation-manager
     content: Implement session rotation on /new, turn persistence, context loader, new-command-strip regex with colocated test
-    status: pending
+    status: completed
   - id: execution-manager
     content: "Implement execute() pipeline: ledger check (silent skip), correlation ID, /start welcome path (first vs repeat), failure handling, ledger record, runtime observability"
-    status: pending
+    status: completed
   - id: global-orchestrator-stub
     content: Create src/global-orchestrator/ with stub orchestrate() returning STUB_GREETING for non-/start messages
-    status: pending
+    status: completed
   - id: constants-and-wiring
     content: Add WELCOME_MESSAGE_FIRST_START to constants.ts; wire store-durable-object.ts; retire handler.ts and handler.test.ts
-    status: pending
+    status: completed
   - id: worker-contract-docs
     content: Document ExecutionResult empty-ok delivery skip in contracts; verify execution-result-adapter behavior; optional transport log for skipped delivery
-    status: pending
+    status: completed
   - id: production-tests
     content: Write store-durable-object/production.integration.test.ts (colocated); deploy; npm test against live worker
-    status: pending
+    status: completed
   - id: prod-validation
     content: Execute Part 8.4 manual Telegram script + Data Studio inspection + wrangler tail review
-    status: pending
+    status: completed
   - id: human-review
     content: Complete Part 10 human review checklist before Component 3
-    status: pending
+    status: completed
 isProject: false
 ---
 

@@ -3,35 +3,35 @@ name: Component 4.1 Fixes
 overview: "Component 4.1 fixes C4 production gaps: business intent as first-class Planning artifact, grounded response faithfulness (single LLM call + deterministic binding verifier), and Verified Fact Registry. Includes full test design, MSP profile test matrix, knowledge-base doc for future tool authors, and production validation per Chapter 15 engineering methodology."
 todos:
   - id: types-business-intent
-    content: "Add businessIntent to StructuredCapabilityPlan, plan verifier, Planning prompt + constitution (Part 4A.1)"
-    status: pending
+    content: Add businessIntent to StructuredCapabilityPlan, plan verifier, Planning prompt + constitution (Part 4A.1)
+    status: completed
   - id: verified-fact-registry
-    content: "VerifiedFactRecord type + MSP registry builder; RunContext registry; fact catalog for Response context"
-    status: pending
+    content: VerifiedFactRecord type + MSP registry builder; RunContext registry; fact catalog for Response context
+    status: completed
   - id: grounded-response
-    content: "generateGroundedResponse JSON + constitution (Part 4A.2); schema validator; wire respond path"
-    status: pending
+    content: generateGroundedResponse JSON + constitution (Part 4A.2); schema validator; wire respond path
+    status: completed
   - id: binding-verifier
-    content: "binding-verifier + valuesMatch + prose detector + outcome bindings; refactor faithfulnessGate"
-    status: pending
+    content: binding-verifier + valuesMatch + prose detector + outcome bindings; refactor faithfulnessGate
+    status: completed
   - id: remove-extractor
-    content: "Delete extractor LLM path, fact-matcher, claim-schema extractor usage; remove/stop FAITHFULNESS_EXTRACT"
-    status: pending
+    content: Delete extractor LLM path, fact-matcher, claim-schema extractor usage; remove/stop FAITHFULNESS_EXTRACT
+    status: completed
   - id: kb-doc
-    content: "Create docs/verified-facts-and-grounded-response.md — tool design contract for future capabilities"
-    status: pending
+    content: Create docs/verified-facts-and-grounded-response.md — tool design contract for future capabilities
+    status: completed
   - id: unit-tests
-    content: "BV-* binding verifier catalog + MSP registry tests + plan verifier businessIntent tests"
-    status: pending
+    content: BV-* binding verifier catalog + MSP registry tests + plan verifier businessIntent tests
+    status: completed
   - id: gemini-spike-g4
-    content: "G4 grounded-response production spike — real Gemini call, JSON schema, trace shape"
-    status: pending
+    content: G4 grounded-response production spike — real Gemini call, JSON schema, trace shape
+    status: completed
   - id: trace-docs-sql
-    content: "Update trace stages, sql/agent-trace.sql, system_Architecture Layer 3, agent-traceability doc"
-    status: pending
+    content: Update trace stages, sql/agent-trace.sql, system_Architecture Layer 3, agent-traceability doc
+    status: completed
   - id: production-validate
-    content: "Deploy, MSP manual matrix (Part 10), wrangler tail, SQL reconstruction; Part 14 human sign-off"
-    status: pending
+    content: Deploy, MSP manual matrix (Part 10), wrangler tail, SQL reconstruction; Part 14 human sign-off
+    status: completed
 isProject: false
 ---
 

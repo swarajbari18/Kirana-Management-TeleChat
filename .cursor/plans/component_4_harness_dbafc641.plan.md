@@ -4,37 +4,37 @@ overview: "Component 4 completes the orchestration harness on the existing My Sh
 todos:
   - id: schema-migration
     content: Add agent_trace_events + shop_profile_history tables via Drizzle; drizzle-kit generate
-    status: pending
+    status: completed
   - id: gemini-spike
     content: "Runtime Gemini API spike: curl gemini-3.6-flash, document thinking/usage metadata shape, extend gemini-client"
-    status: pending
+    status: completed
   - id: runcontext-trace
     content: Implement RunContext L1 + agent-trace-repository L2; wire into Execution Manager and GO/MSP
-    status: pending
+    status: completed
   - id: constants-split
     content: Split MAX_GO_PLAN_VERIFY_RETRIES, MAX_BC_TOOL_PLAN_VERIFY_RETRIES, MAX_GO_GEMINI_ROUNDS, MAX_FAITHFULNESS_REGEN, MAX_CLAIM_EXTRACTION_RETRIES with documented purposes
-    status: pending
+    status: completed
   - id: execution-engine
     content: "Dependency-aware execution engine: complete plan interaction per invocation, skip blocked deps, run independents, per-step trace, never calls Decision"
-    status: pending
+    status: completed
   - id: go-full-loop
     content: "Refactor orchestrate(): harness retry, strategic replan/clarify/respond, enriched decision context, error trace"
-    status: pending
+    status: completed
   - id: msp-harness
     content: MSP harness retry, parameter grounding, re-invoke context (objective + prior plan + prior results), nested trace events
-    status: pending
+    status: completed
   - id: faithfulness
-    content: "Layer 3 faithfulness gate on respond path — superseded by Component 4.1 (grounded response + bindings; see component_4.1_fixes plan)"
-    status: pending
+    content: Layer 3 faithfulness gate on respond path — superseded by Component 4.1 (grounded response + bindings; see component_4.1_fixes plan)
+    status: completed
   - id: profile-history
     content: shop_profile_history writes on post-confirmation applied tool success only
-    status: pending
+    status: completed
   - id: sql-trace-rewrite
     content: Rewrite sql/agent-trace.sql for persisted-only timeline; create docs/scenarios-for-query-matrix.md
-    status: pending
+    status: completed
   - id: production-validate
     content: Deploy, run integration tests, wrangler tail, manual 2-3 queries.csv runs with SQL reconstruction; human review Part 20
-    status: pending
+    status: completed
 isProject: false
 ---
 
