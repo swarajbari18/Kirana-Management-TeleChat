@@ -1,6 +1,6 @@
 # Agent traceability & agent state
 
-**Component 3 status:** Runtime behavior is **production-validated manually** (onboarding, GST confirmation with Yes/No buttons, instruction preferences including post-`/new` persistence, out-of-scope routing). Automated tests cover transport, Gemini connectivity, and unit-level rules (~40% of plan acceptance criteria by design — LLM UX and Telegram buttons require human judgment).
+**Component 4 status:** `agent_trace_events` and `shop_profile_history` are written at runtime. Every harness transition (plan, verify, execute, decide, response, faithfulness) appends an L2 row with monotonic `seq`. MSP tool stages nest under `CAPABILITY_INVOKED` via `parent_event_id`. Reconstruct runs with [`sql/agent-trace.sql`](../sql/agent-trace.sql).
 
 **This document** defines **agent state** (what it is, why it exists, how it differs from conversation state), records what can be reconstructed from SQLite today, and specifies what **Component 4** must add so every run in [`queries.csv`](../queries.csv) is fully auditable without `wrangler tail`.
 
@@ -283,25 +283,39 @@ This proves **that** a sensitive write was proposed, how the user resolved it, a
 
 These are **Component 4 requirements**, not C3 functional bugs.
 
-### 1. Agent state / LLM orchestration steps (largest gap)
+### 1. Agent state / LLM orchestration steps — **implemented in C4**
 
-Not persisted at runtime:
+Persisted in `agent_trace_events` at runtime:
 
-| Step | Layer | Today |
-|------|-------|--------|
-| Context assembled | Global Orchestrator | In-memory only |
-| Capability plan JSON | Global Orchestrator | In-memory only; inferred row in `agent-trace.sql` |
-| Capability plan verification result | GO | In-memory only |
-| Tool plan JSON | My Shop Profile | In-memory only |
-| Tool plan verification result | MSP | In-memory only |
-| Per-tool inputs/outputs (before confirm) | MSP tools | Only final write visible via `shop_profile` + `pending_confirmations` |
-| GO decision mode output | GO | In-memory only; plan not passed to decision |
-| GO response generation grounding | GO | Only final text in `conversation_turns` / `result_json` |
-| Replan versions (v1 plan → v2 plan) | GO | Not implemented |
+| Step | Layer | C4 |
+|------|-------|-----|
+| Context assembled | Global Orchestrator | `CONTEXT_ASSEMBLED` |
+| Capability plan JSON | Global Orchestrator | `CAPABILITY_PLAN` + `LLM_INVOCATION` payload |
+| Capability plan verification | GO | `PLAN_VERIFIED` / `PLAN_VERIFICATION_FAILED` |
+| Tool plan JSON | My Shop Profile | `TOOL_PLAN` (nested under `CAPABILITY_INVOKED`) |
+| Tool plan verification | MSP | `TOOL_PLAN_VERIFIED` / `TOOL_PLAN_VERIFICATION_FAILED` |
+| Parameter grounding | MSP | `PARAMETER_GROUNDING_FAILED` |
+| Per-tool execution | MSP tools | `TOOL_EXECUTED` |
+| GO decision mode | GO | `DECISION` |
+| GO response / faithfulness | GO | `RESPONSE_GENERATED`, `FAITHFULNESS_*` |
+| Replan versions | GO | `planVersion` on payloads; append-only rows |
 
-**Workaround today:** `wrangler tail` filtered by `correlation_id` from `work_queue`.
+**Reconstruct:** [`sql/agent-trace.sql`](../sql/agent-trace.sql) — `SELECT * FROM agent_trace_events WHERE update_id = ? ORDER BY seq`.
 
-**C4 target:** Append-only `agent_trace_events` (evolve `orchestration_checkpoints`) — every REASON → VERIFY → EXECUTE → DECIDE step with `snapshot_json` and `seq`.
+### LLM invocation payload shape (C4)
+
+```json
+{
+  "step": "go_plan | go_decision | go_response | bc_plan | go_faithfulness_extract",
+  "model": "gemini-3.6-flash",
+  "invocation": { "systemInstruction": "...", "contents": [...] },
+  "output": { "content": "...", "reasoning": "...", "parsed": {} },
+  "usage": { "promptTokenCount": 0, "candidatesTokenCount": 0, "totalTokenCount": 0 },
+  "durationMs": 0
+}
+```
+
+Reasoning/thinking blocks are **trace-only** — never fed to the next harness step's `contents`.
 
 ### 2. `orchestration_checkpoints` table
 
@@ -400,7 +414,7 @@ Until then, **manual validation + partial SQL timeline + wrangler tail** is the 
 Product behavior matrix    → queries.csv
 Conversation replay        → conversation_turns
 Partial SQL timeline       → sql/agent-trace.sql (set update_id)
-LLM / harness step detail  → wrangler tail (today); agent_trace_events (C4)
+LLM / harness step detail  → agent_trace_events (+ wrangler tail for transport/runtime)
 Current profile snapshot   → shop_profile
 Confirmation audit         → pending_confirmations
 Agent state (full tree)    → Component 4 agent_trace_events

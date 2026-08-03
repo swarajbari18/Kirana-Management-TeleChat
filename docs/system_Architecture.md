@@ -54,6 +54,110 @@ Everything else remains deterministic software engineering.
 
 
 
+## ML Engineering vs AI Engineering
+
+Traditional **machine learning engineering** chains models where correctness compounds multiplicatively. If two independent classifiers each achieve 80% accuracy on their task, a pipeline that requires both to succeed operates at roughly 64% end-to-end accuracy — an **AND** over probabilistic components.
+
+**AI engineering** (as used in this document) is different. The language model is not the application. It is one probabilistic component inside a **software harness** that:
+
+- enforces phase boundaries in code (REASON → VERIFY → EXECUTE → DECIDE → RESPOND),
+- verifies structured artifacts before any side effect,
+- feeds verification failures back into the next reasoning step,
+- separates business truth (SQLite) from reasoning artifacts (plans, decisions),
+- grounds natural language in verified facts before delivery.
+
+Accuracy therefore improves through **software engineering** — separation of concerns, deterministic gates, evidence-based replanning — rather than through stacking more models. The harness turns probabilistic steps into bounded artifacts; deterministic code owns everything that must not be wrong.
+
+This is why the Global Orchestrator is implemented as a **harness**, not as a monolithic ReAct agent. See §6.4 and §6.18.
+
+---
+
+
+
+## Scope of AI Engineering in This Project
+
+AI engineering here covers **only** the bounded places where a language model produces structured or natural-language **artifacts**:
+
+| LLM artifact | Harness step | Owned by |
+|--------------|--------------|----------|
+| Capability execution plan JSON | GO Planning | Global Orchestrator |
+| Decision JSON (`replan` \| `clarify` \| `respond`) | GO Decision | Global Orchestrator |
+| Grounded natural-language response | GO Response | Global Orchestrator |
+| Factual-claim extraction JSON | Faithfulness (pre-delivery) | Global Orchestrator |
+| Tool operation plan JSON | BC Planning | Business Capability |
+
+Everything else — transport, persistence, tool dispatch, plan verification, dependency scheduling, confirmation UI, faithfulness matching, trace persistence, Telegram delivery — is **deterministic software engineering**.
+
+The LLM never:
+
+- invokes tools or capabilities directly,
+- modifies business state,
+- decides when to verify or execute,
+- owns the control loop.
+
+---
+
+
+
+## Three Engineering Disciplines
+
+Building this system requires three separable design activities. They must not be conflated.
+
+### Context Engineering
+
+**Definition:** For each individual LLM API call, which subset of agent state (agent state and conversation state are two different idea according to me) is serialized into `system_instruction` and user content for **that call only**.
+
+Context engineering is **not** agent state. It is **not** stuffing the full harness trace into every prompt. Each step receives a minimal constitutional system message plus an engineered user payload drawn from orchestration context and, where appropriate, selected prior artifacts (e.g. prior plan + capability results on strategic replan; prior tool plan on BC re-invoke).
+
+**Rules:**
+
+- GO Planning (replan): full conversation turns + prior plan + capability results; **excludes** BC tool-level I/O.
+- GO Decision: business intent, plan artifact, all objective results after the **complete** execution phase, verified facts, prior Decision/replan history; **excludes** raw tool internals. Decision runs **once per plan version** — never between objectives.
+- GO Response / Clarify: verified facts from completed objectives, status outcomes (`denied`, `clarification_needed`); owner instruction preferences.
+- BC Planning (re-invoke): new objective + **prior tool plan artifact** (feedback requires the original plan).
+- Gemini **thinking / internal reasoning**: captured in **agent trace only** — never fed into the next step's context.
+
+LLM calls are **stateless**: one `system_instruction` and one user payload per call. There is no shared multi-turn Gemini thread across harness steps (see §6.18).
+
+### Harness Engineering
+
+**Definition:** All deterministic code around the language model — the software product that makes AI engineering reliable.
+
+Includes:
+
+- Telegram webhook → Worker → Durable Object → work queue → Execution Manager,
+- phase transitions and gates,
+- plan verification (Layer 1), capability/tool dispatch, execution engine,
+- tool-owned confirmation (`pending_confirmations`, `callback_query`),
+- faithfulness verification (Layer 3) before delivery,
+- agent trace persistence,
+- structured observability logs,
+- idempotency and ledger.
+
+The harness is why verification feedback increases effective accuracy instead of multiplying errors. Business capabilities are harness sub-routines, not autonomous nested agents.
+
+### Loop Engineering
+
+**Definition:** How the control loop is shaped to solve the business problem — and **who owns replanning**.
+
+| Loop | Owner | Strategic replan? | Harness retry? |
+|------|-------|-------------------|----------------|
+| **Global Orchestrator** | TypeScript `orchestrate()` | Yes — Decision Mode → replan when objectives not met | Yes — immediate replan when plan verification fails (no Decision Mode) |
+| **Business Capability** | Capability handler (single shot per GO invocation) | **No** — returns evidence to GO | Yes — replan when **tool plan** verification or pre-tool parameter grounding fails |
+
+**Two replan mechanisms (never conflate):**
+
+1. **Harness retry** — plan artifact invalid. Deterministic verifier returns diagnostics → Planning retries immediately. Goal: fix the **plan**. Does not pass through Decision Mode.
+2. **Strategic replan** — business objective not satisfied after execution. Decision Mode → Planning with prior plan + results. Goal: fix **intent → objective** mapping.
+
+Nested "loop in loop" at the agent level is avoided. The recursive **abstraction** (plan → verify → execute) is shared; the recursive **strategic control loop** exists only at the Global Orchestrator.
+
+Loop engineering may be expressed as prompts (ReAct-style instructions) or, in this system, **primarily as harness code** with minimal constitutional prompts per step.
+
+---
+
+
+
 ## Core Architectural Flow
 
 Every request follows the same conceptual transformation.
@@ -924,12 +1028,13 @@ Temporary conversational information.
 
 Examples:
 
-- Current clarification
-- Active draft bill
-- Conversation context
-- Pending user decisions
+- Current draft bill (future — Pending Execution State)
+- Conversation context (turns)
+- Pending user decisions via **confirmation** (`pending_confirmations` — tool-owned, same work item)
 
 Conversation state supports reasoning only and is never considered business truth.
+
+**Clarification** is not stored as active orchestration state — only as assistant/user turns in the transcript.
 
 Conversation state is the **product I/O boundary**: what the shop owner said and the final assistant reply. It must not be confused with agent state (see §6.18).
 
@@ -1722,22 +1827,13 @@ The resolver converts these references into explicit business references before 
 
 ### Clarification Manager
 
-Manages conversations requiring additional information.
+### Clarification Manager
 
-Examples:
+When capabilities return `clarification_needed`, the Global Orchestrator uses **Response Mode** to phrase natural-language questions. The Conversation Manager's role is to **persist** the resulting assistant turn — not to maintain a clarification state machine.
 
-- Unknown product.
-- Ambiguous product.
-- Missing payment method.
-- Multiple matching products.
+Prior clarification questions and owner replies appear in `conversation_turns`. The next inbound message triggers a fresh orchestration run that reads this history.
 
-The manager records:
-
-- pending clarification
-- expected answer
-- associated business operation
-
-When the owner replies, the clarification is resumed instead of starting a new workflow.
+**Confirmation** (tool-owned Yes/No) is orthogonal: handled inside tools via `pending_confirmations` on the same work item — not by the Conversation Manager.
 
 ---
 
@@ -1745,17 +1841,15 @@ When the owner replies, the clarification is resumed instead of starting a new w
 
 ### Conversation State Manager
 
-Maintains temporary conversation information.
+Maintains conversational turn history for the active session.
 
 Examples include:
 
-- active draft bill reference
-- pending clarification
-- active conversational topic
-- recently referenced entities
-- temporary conversational variables
+- user and assistant turns (`conversation_turns`),
+- active session metadata,
+- command-stripped `context_text` for LLM consumption.
 
-Conversation state is temporary and exists only to support ongoing dialogue.
+Conversation state is the **product I/O boundary**. It supports reasoning on the next message but is never business truth. There is no `pending_clarification` orchestration state — clarification arcs are visible only as turns in the transcript.
 
 ---
 
@@ -1976,7 +2070,7 @@ The Conversation Manager is complete when:
 
 - Multi-turn conversations are reconstructed correctly.
 - Conversational references resolve correctly.
-- Clarification workflows resume correctly.
+- Clarification arcs continue via **conversation turns** (next message triggers fresh orchestration replan — no clarification state machine).
 - Temporary state never becomes business truth.
 - Expired conversations are handled safely.
 - The Global Orchestrator always receives a complete conversation context.
@@ -1991,9 +2085,9 @@ Validate against the deployed Telegram bot using realistic conversational scenar
 
 Successful validation demonstrates that:
 
-- Follow-up messages correctly continue previous interactions.
-- Ambiguous requests trigger clarification rather than assumptions.
-- Clarification responses resume the original workflow.
+- Follow-up messages correctly continue previous interactions via conversation turns.
+- Ambiguous requests trigger clarification (natural language) rather than assumptions.
+- After clarification, the owner's next message triggers a **fresh orchestration run** that replans from full conversation history.
 - Conversation resets do not affect persisted business information.
 - Temporary conversation state is correctly isolated from durable business state.
 
@@ -2308,11 +2402,9 @@ Execution therefore evolves according to verified business evidence rather than 
 
 ### 5. Clarification Management
 
-The orchestrator is responsible for determining when sufficient information is unavailable to continue execution safely.
+The orchestrator determines when sufficient information is unavailable to continue execution safely.
 
-Whenever ambiguity prevents reliable execution, the orchestrator suspends planning and requests clarification from the owner.
-
-Execution resumes only after sufficient information has been obtained.
+When capabilities return `clarification_needed`, Decision Mode selects clarify after the execution phase. Response Mode generates a natural-language question. The **current agent run terminates**; the owner's next message starts a new run that replans from conversation history (§6.9).
 
 Clarification is treated as part of the reasoning process rather than as a business operation.
 
@@ -2357,19 +2449,17 @@ Natural language generation is therefore grounded entirely in deterministic busi
 
 ### 8. Execution Lifecycle Decisions
 
-Throughout execution, the orchestrator continuously evaluates the state of the request.
+After the **execution engine completes the full plan interaction** for the current plan version (all runnable objectives executed or skipped per dependencies), the orchestrator enters Decision Mode **once**.
 
-After every capability completes its work, the orchestrator determines one of the following actions:
+Decision Mode evaluates whether the owner's **business intent** has been satisfied given the plan artifact, verified facts, and all objective outcomes. It selects exactly one of:
 
-- continue execution,
-- delegate to another capability,
-- request clarification,
-- regenerate the response,
-- or terminate execution.
+- **re-plan** — business intent not met; new planning cycle required,
+- **request clarification** — missing information; terminal natural-language question to the owner,
+- **generate final response** — intent satisfied or terminal acknowledgment (e.g. denial).
 
-This iterative decision-making process forms the application's adaptive control loop.
+Decision Mode is **never** invoked after individual objectives complete. The execution plan models one multi-capability **interaction**; strategic judgment happens only after that interaction finishes.
 
-The next action is always determined from the current verified execution state rather than from a predefined workflow.
+Harness retry (invalid plan structure) returns immediately to Planning with verifier diagnostics — it does not pass through Decision Mode.
 
 ---
 
@@ -2431,6 +2521,8 @@ The Global Orchestrator is implemented as a **harness** (TypeScript control loop
 The LLM does not decide when to verify or execute. Code does. That separation is what makes orchestration **measurable and improvable**. Agent state records each harness transition so engineers can reconstruct the full run without reproducing it (see §6.18).
 
 Each LLM step uses a **minimal system message** — a constitutional slice for that phase (planner, decision, response), not a long instruction manual. Steps share the same **orchestration context** (turns, profile, inbound) as live input; they do not share one multi-turn Gemini thread with swapped system prompts.
+
+The three engineering disciplines — **context engineering**, **harness engineering**, and **loop engineering** — are defined in §1. Context engineering applies per LLM call; harness engineering owns phase transitions and persistence; loop engineering defines GO strategic loop vs BC single-shot subroutine (see §6.4 Execution Engine, §6.9 Clarification, §7.5).
 
 ---
 
@@ -2495,9 +2587,9 @@ Each LLM step uses a **minimal system message** — a constitutional slice for t
                                    │
 
              ┌──────────────┬───────────────┬───────────────┐
-             ▼              ▼               ▼               ▼
+             ▼              ▼               ▼
 
-         Continue        Re-plan       Ask Clarification   Generate Response
+           Re-plan       Ask Clarification   Generate Response
 
                                    │
                                    ▼
@@ -2643,9 +2735,21 @@ The language model never executes capabilities directly.
 
 Instead, it delegates execution to the Execution Engine.
 
-The Execution Engine executes one plan step at a time.
+The Execution Engine executes the **complete plan interaction** for the current plan version.
 
-After each completed step it verifies execution and produces structured execution results before continuing to the next step.
+Runnable objectives are executed according to **objective dependencies** until no further runnable objectives remain.
+
+**Dependency-aware execution (locked behaviour):**
+
+- Objectives whose dependencies are satisfied (or have none) may run.
+- Objectives whose dependencies are blocked (`clarification_needed`, `denied`, `error`, or unresolved) are **skipped**.
+- If objective A returns `clarification_needed` and objective B is **independent** of A, B still runs in the same execution phase.
+- If objective C **depends** on A and A is blocked, C is skipped.
+- When the **entire execution phase** completes (all runnable steps done, dependents skipped as needed), **full results** — completed, clarification, denied, and skipped — are passed to Decision Mode **once**.
+
+The Execution Engine **never** invokes Decision Mode, Planning, or any language model. It is purely deterministic.
+
+Decision Mode is never called between individual objectives.
 
 This allows deterministic software to own repetitive execution while allowing the language model to remain focused on strategic reasoning.
 
@@ -2655,27 +2759,24 @@ This allows deterministic software to own repetitive execution while allowing th
 
 ### Decision Mode
 
-Once execution pauses or completes, control returns to the Global Orchestrator.
+Once the **execution phase** completes for the current plan version, control returns to the Global Orchestrator.
 
 Rather than generating another execution plan immediately, the orchestrator enters Decision Mode.
 
+Decision Mode is **not** entered when plan verification fails structurally — that triggers **harness retry** (immediate return to Planning with verifier diagnostics; see §1 Three Engineering Disciplines).
+
 Decision Mode reasons over:
 
-- the original business intent,
-- the remaining business objectives,
-- verified execution results,
-- blocked objectives,
-- newly discovered business facts.
+- the **business intent** (what the owner is trying to accomplish),
+- the **current execution plan artifact** (objectives and capability assignments — already produced by Planning; Decision does not re-derive objectives),
+- plan verification outcome,
+- **all** objective results from the completed execution phase (completed, `clarification_needed`, `denied`, skipped),
+- verified business facts from completed objectives,
+- prior replan versions and prior Decision rationale (from agent state when replanning).
+
+Decision Mode asks: **given this evidence, is business intent satisfied?**
 
 Decision Mode determines exactly one of the following actions.
-
-### Continue Execution
-
-Continue with the remaining objectives using the existing execution plan.
-
----
-
-
 
 ### Re-plan
 
@@ -2736,10 +2837,6 @@ Verified Execution Results
 Decision Mode
 
 ↓
-
-Continue
-
-or
 
 Re-plan
 
@@ -2907,7 +3004,7 @@ This ensures that each business capability can evolve independently without intr
 
 ### Principle 7 — Clarify Rather Than Guess
 
-Whenever verified information is insufficient to continue execution safely, the orchestrator must suspend execution and request clarification.
+Whenever verified information is insufficient to continue execution safely, the orchestrator ends the execution phase and requests clarification in natural language.
 
 Examples include:
 
@@ -2917,7 +3014,7 @@ Examples include:
 - conflicting business information,
 - missing customer identity.
 
-Execution resumes only after sufficient information has been obtained.
+The owner's **next message** begins a new orchestration cycle that replans from conversation turns. There is no suspended orchestration state to resume.
 
 The orchestrator must never compensate for missing business information through probabilistic inference.
 
@@ -3082,10 +3179,10 @@ It continuously reasons over verified business facts until the owner's business 
                          │
                          ▼
 
-        ┌──────────────┬──────────────┬──────────────┬──────────────┐
-        ▼              ▼              ▼              ▼
+        ┌──────────────┬──────────────┬──────────────┐
+        ▼              ▼              ▼
 
- Continue Plan     Re-plan      Ask Clarification   Generate Response
+     Re-plan      Ask Clarification   Generate Response
 
         │              │              │              │
         └──────┬───────┴──────┬───────┴──────────────┘
@@ -3112,14 +3209,13 @@ The orchestrator begins by constructing the complete execution context.
 This combines:
 
 - execution context,
-- conversation context,
-- active clarification state,
-- previously verified business facts,
-- active business objectives.
+- conversation context (full turn history for the active session),
+- owner preferences and profile snapshot,
+- the inbound message.
 
 The orchestrator never reasons from the user's message in isolation.
 
-Every reasoning cycle begins from the complete current state of the business interaction.
+Every reasoning cycle begins from conversation context plus durable owner state. **There is no clarification state machine** — when a prior turn ended with a clarification question, the owner's reply appears as the next user turn and the Global Orchestrator **replans from full conversation** on a **fresh agent run** (see §6.9).
 
 ---
 
@@ -3191,7 +3287,9 @@ Those responsibilities belong exclusively to the participating business capabili
 
 Control passes to the Execution Engine.
 
-For each objective-capability assignment contained within the execution plan, the Execution Engine invokes the owning Business Capability.
+The Execution Engine runs the **complete plan interaction** for the current plan version — all runnable objectives until fixpoint. It **never** invokes Decision Mode between objectives.
+
+For each runnable objective-capability assignment, the Execution Engine invokes the owning Business Capability.
 
 The Business Capability now becomes responsible for satisfying the assigned business objective.
 
@@ -3295,7 +3393,7 @@ These verified facts become the only authoritative evidence available to the orc
 
 ### Stage 7 — Situation Evaluation
 
-Control returns to the orchestrator.
+Control returns to the orchestrator **after the full execution phase completes** (not after individual objectives).
 
 The orchestrator evaluates:
 
@@ -3316,17 +3414,7 @@ No assumptions are introduced during evaluation.
 
 ### Stage 8 — Runtime Decision
 
-Based on the current execution state, the orchestrator selects exactly one next action.
-
-#### Continue Execution
-
-The current execution plan remains valid.
-
-Remaining objectives continue.
-
----
-
-
+Based on the completed execution interaction, the orchestrator selects exactly one next action.
 
 #### Re-plan
 
@@ -3340,9 +3428,13 @@ The execution strategy must be updated.
 
 #### Request Clarification
 
-Execution cannot safely continue because required business information is unavailable.
+Required business information is unavailable for one or more objectives.
 
-Execution pauses until the owner responds.
+The execution phase ends. Decision Mode selects clarify. **Response Mode** (Gemini) generates a **natural-language** question for the owner — never raw JSON or internal diagnostics. Multiple `clarification_needed` results from independent objectives may be **aggregated** into one message (tables when helpful).
+
+The orchestration **run terminates**: assistant turn is delivered, in-memory agent state (L1) is discarded. The owner's next message starts a **new** agent run (`update_id`, `correlation_id`). Continuity comes from **conversation turns**, not from resuming suspended orchestration.
+
+**Exception — confirmation (not clarification):** sensitive writes use tool-owned Yes/No `callback_query` buttons. The **same** work item stays alive on the Durable Object while the tool `await`s approval. See §6.9.
 
 ---
 
@@ -3616,7 +3708,9 @@ Every orchestration layer follows the same architectural philosophy:
 - verify,
 - return evidence.
 
-Only the scope of responsibility changes.
+Only the **scope of responsibility** changes.
+
+**Important:** shared skeleton does **not** mean nested strategic loops. The Global Orchestrator owns the only strategic control loop (`replan` / `clarify` / `respond`). There is **no `continue` action** — the execution engine runs the **full plan interaction** before Decision Mode runs once. Each Business Capability is a **single-shot subroutine** per invocation: plan tools → verify → execute → return `CapabilityResult`. Capabilities may **harness-retry** when the tool plan is structurally invalid or parameter grounding fails (pre-execution only). Post-execution gaps are returned to the Global Orchestrator for strategic replan — not handled by an inner business-objective loop.
 
 ---
 
@@ -3963,9 +4057,25 @@ The purpose of the clarification strategy is to resolve ambiguity while preservi
 
 The orchestrator must therefore prefer requesting clarification over making probabilistic assumptions.
 
-Clarification is treated as a first-class execution outcome rather than an error condition.
+Clarification is treated as a **terminal execution outcome** for the current agent run — not an error, and not a suspended workflow.
 
-Execution pauses until sufficient information has been obtained.
+---
+
+
+
+### Clarification vs Confirmation (critical distinction)
+
+| | **Clarification** | **Confirmation** |
+|---|-------------------|-------------------|
+| **Meaning** | Missing information — ask owner to provide more | Complete data — ask owner to **authorize** a write |
+| **User action** | Type in chat (natural language) | Tap **Yes** or **No** inline button only (`callback_query`) |
+| **Telegram event** | `message` | `callback_query` |
+| **State machine** | **None** — conversation turns are the memory | Tool-owned wait — `pending_confirmations` + in-memory promise on DO |
+| **GO involvement** | Response Mode generates NL question | GO never sees mid-confirmation UI; only final tool outcome |
+| **Same agent run?** | **No** — run ends after clarification message sent | **Yes** — tool `await`s; same `update_id` / work item |
+| **Next message** | Fresh agent run; GO replans from full conversation | N/A (resolved in same run) |
+
+Chat text `"yes"` is **not** confirmation. Only `callback_query` with encoded `confirmationId` authorizes writes.
 
 ---
 
@@ -3973,15 +4083,13 @@ Execution pauses until sufficient information has been obtained.
 
 ### Architectural Principle
 
-The orchestrator is responsible for deciding **whether clarification is required**.
+The orchestrator is responsible for deciding **whether clarification is required** (via Decision Mode after execution phase).
 
 The Business Capability is responsible for determining **what information is missing** to safely satisfy its assigned business objective.
 
-This preserves the architectural ownership boundary.
+The Global Orchestrator remains responsible for all **natural-language** communication with the owner. Capabilities return structured `clarification_needed` — never Telegram messages.
 
-The orchestrator understands the overall execution.
-
-The capability understands its own business domain.
+**There is no clarification state machine.** The Conversation Manager does not maintain `pending clarification` rows for orchestration suspend/resume. Prior assistant clarification questions and owner replies live in `conversation_turns`; the next inbound message triggers a new orchestration cycle that reads that history.
 
 ---
 
@@ -4081,42 +4189,46 @@ Business Intent
 
 ↓
 
-Planning
+Planning → Execution Phase
 
 ↓
 
-Capability
+Capability returns clarification_needed
 
 ↓
 
-Insufficient Information
+(Other independent objectives may still run in same phase)
 
 ↓
 
-Structured Clarification Request
+Execution Phase Completes
 
 ↓
 
-Global Orchestrator
+Decision Mode → clarify
 
 ↓
 
-Clarification Question
+Response Mode → natural-language question (aggregated if multiple)
 
 ↓
 
-Owner Response
+Assistant turn persisted → Run Terminates (L1 agent state discarded)
 
 ↓
 
-Conversation Manager Updates Context
+Owner sends next message (new update_id)
 
 ↓
 
-Orchestration Loop Resumes
+Conversation Manager loads turns
+
+↓
+
+Fresh agent run → GO replans from full conversation
 ```
 
-The clarification becomes part of the ongoing execution rather than beginning a new conversation.
+Clarification does **not** suspend and resume orchestration inside one agent run. Conversation reconstruction **is** the resume mechanism.
 
 ---
 
@@ -4124,16 +4236,9 @@ The clarification becomes part of the ongoing execution rather than beginning a 
 
 ### Structured Clarification Contract
 
-Every clarification request returned by a Business Capability contains:
+Every clarification request returned by a Business Capability contains structured fields (e.g. `status: clarification_needed`, `reason`, `requiredInfo`).
 
-- Objective Identifier
-- Capability Identifier
-- Clarification Reason
-- Missing Information
-- Expected Response Type
-- Current Execution State
-
-This allows the Global Orchestrator to resume execution deterministically once the owner's response has been received.
+The Global Orchestrator passes these to **Response Mode** to produce owner-facing natural language. The owner never sees raw internal codes.
 
 ---
 
@@ -4141,19 +4246,15 @@ This allows the Global Orchestrator to resume execution deterministically once t
 
 ### Clarification Context
 
-The Conversation Manager records every active clarification.
+Continuity across clarification turns is provided by **conversation state** only:
 
-This includes:
+- prior user messages,
+- prior assistant messages (including clarification questions),
+- owner preferences loaded from SQLite.
 
-- originating objective,
-- originating capability,
-- pending question,
-- expected information,
-- execution state before suspension.
+When the owner replies, a **new** orchestration run begins. Planning Mode reads full conversation and may produce a new execution plan. No `pending_clarification` execution state is required.
 
-When the owner replies, the orchestrator resumes the suspended execution rather than constructing a completely new execution plan.
-
-The clarification therefore becomes part of the same execution lifecycle.
+**Future note:** Pending Execution State (§12) applies to cross-message **business** suspension (e.g. draft bills), not to orchestration clarification — which uses conversation reconstruction.
 
 ---
 
@@ -4165,10 +4266,10 @@ The following constitutional rules always apply.
 
 - Clarification must never modify business state.
 - Clarification must never partially execute a business objective.
-- Clarification pauses execution rather than terminating it.
-- Only one clarification may remain active for a business objective at any given time.
-- The orchestrator always owns communication with the owner.
+- Clarification **terminates** the current agent run after the assistant message is delivered.
+- The orchestrator always owns communication with the owner (via Response Mode for NL).
 - Business Capabilities never communicate with the owner directly.
+- Sensitive writes use **confirmation** (tool-owned buttons), not clarification chat text.
 
 ---
 
@@ -4176,49 +4277,39 @@ The following constitutional rules always apply.
 
 ### Clarification Completion
 
-A clarification completes when one of the following outcomes occurs.
+A clarification **conversation arc** completes when the owner supplies sufficient information in a later message and a subsequent orchestration run successfully satisfies the business objective.
 
 #### Information Received
 
-The owner supplies the required information.
+The owner supplies the required information in a **new** Telegram message.
 
-Execution resumes from the suspended objective.
-
----
-
-
+A fresh agent run starts. The Global Orchestrator replans using full conversation context.
 
 #### Clarification Cancelled
 
-The owner explicitly cancels the request.
+The owner explicitly cancels the request in natural language.
 
-The associated business objective is terminated safely.
-
----
-
-
+A subsequent run may safely refuse or replan.
 
 #### Clarification Becomes Invalid
 
-Subsequent conversation renders the pending clarification obsolete.
+Subsequent conversation renders the prior clarification question obsolete.
 
-The clarification is discarded.
-
-The orchestrator replans using the latest business intent.
+The Global Orchestrator replans using the latest business intent from conversation — no stale clarification state to discard.
 
 ---
 
 
 
-### Architectural Principle
+### Architectural Principle (clarification)
 
-Clarification is not a conversational feature.
+Clarification is not a conversational feature alone.
 
-It is an execution mechanism.
+It is an execution mechanism that prevents replacing missing business information with probabilistic assumptions.
 
-Its purpose is to preserve business correctness by preventing the system from replacing missing business information with probabilistic assumptions.
+Whenever sufficient evidence does not exist to continue safely, the execution phase ends, the owner receives a natural-language question, and the **next** message begins a new orchestration cycle grounded in conversation history.
 
-Whenever sufficient evidence does not exist to continue safely, execution pauses, clarification is obtained and the orchestration loop resumes only after the required information has been verified.
+Confirmation for writes remains tool-owned and is orthogonal to clarification (see table above).
 
 ## 6.10 Verification Architecture
 
@@ -4266,6 +4357,8 @@ This verification is performed entirely by deterministic software.
 
 The language model never verifies its own plan.
 
+**Harness retry:** If verification fails, execution does **not** begin and Decision Mode is **not** invoked. Control returns immediately to Planning Mode with structured diagnostics. This is a **harness retry** (goal: fix the plan artifact), distinct from **strategic replan** after Decision Mode (goal: fix business objective mapping). Both are traced (see §6.18).
+
 ---
 
 
@@ -4303,7 +4396,7 @@ Execution begins.
 
 Execution is rejected together with structured diagnostics explaining why the plan cannot be executed.
 
-The Global Orchestrator reasons again using these diagnostics.
+Planning Mode reasons again using these diagnostics (**harness retry** — not Decision Mode).
 
 ---
 
@@ -4404,7 +4497,16 @@ Every capability defines verification appropriate to its own business domain.
 
 ### Verified Business Facts
 
-The output of every capability is a structured collection of verified business facts.
+The output of every capability is a structured **CapabilityResult**:
+
+| Outcome | Meaning | Business truth? |
+|---------|---------|-----------------|
+| `completed` + `verifiedFacts` | Objective achieved; facts reflect SQLite-persisted or read state | **Yes** — grounds response and faithfulness |
+| `clarification_needed` | Missing information to proceed | No |
+| `denied` | User rejected or timed out confirmation (`status` + `reason`) | No — action outcome, not a fact |
+| `error` | Infrastructure or unexpected failure | No |
+
+Verified business facts (`verifiedFacts`) are the authoritative evidence for orchestration and faithfulness. Denial is an **action status**, not a verified fact.
 
 These facts become the authoritative evidence used by the remainder of the orchestration loop.
 
@@ -4438,13 +4540,14 @@ Unlike Business Verification, this layer validates language rather than business
 
 ### Verification Strategy
 
-The generated response is analysed as a collection of factual claims.
+Faithfulness verification is **hybrid**:
 
-Each factual claim is compared against the verified business facts collected during execution.
+1. **Claim extraction** — the language model extracts factual claims from the generated response into a **fixed JSON schema** (entity, attribute, value, text).
+2. **Schema validation** — deterministic code verifies the extraction JSON shape. Malformed extractions trigger a **schema correction loop** (retry extraction with diagnostics) — distinct from unsupported-claim failures.
+3. **Deterministic matching** — each validated claim is compared against a **normalized verified-facts store** built from `CapabilityResult.verifiedFacts` (SQLite business truth from completed objectives only).
+4. **Regeneration** — unsupported claims trigger response regeneration (capped); business execution is never repeated.
 
-Every claim must be fully supported.
-
-Unsupported claims are rejected.
+`denied` outcomes (`{ status, reason }`) inform response tone but are **not** verified facts for claim matching.
 
 ---
 
@@ -4523,12 +4626,21 @@ If faithfulness verification fails:
 
 - business execution is **not** repeated,
 - verified business facts remain unchanged,
-- the response is regenerated,
+- the response is regenerated (up to a configured cap),
 - verification is performed again.
+
+**Two failure modes:**
+
+| Mode | Cause | Recovery |
+|------|-------|----------|
+| **Malformed extraction** | Claim JSON has wrong keys or shape | Schema correction loop (re-extract) |
+| **Unsupported claims** | Valid extraction but claim not in verified facts | Response regeneration |
 
 Only response generation is retried.
 
 Business execution remains deterministic.
+
+Gemini thinking/reasoning during faithfulness steps is stored in **agent trace only**, not in subsequent context.
 
 ---
 
@@ -5045,7 +5157,9 @@ Grounding is a runtime requirement rather than a prompt engineering technique.
 
 ## Rule 8 — Clarification Takes Priority Over Assumption
 
-Whenever sufficient information does not exist to safely continue execution, the orchestrator must suspend execution and request clarification.
+Whenever sufficient information does not exist to safely continue execution, the orchestrator must end the execution phase and request clarification in natural language (Response Mode).
+
+The current agent run terminates. The owner's next message triggers a new orchestration cycle that replans from conversation history.
 
 Execution must never continue by replacing missing business information with probabilistic inference.
 
@@ -5224,7 +5338,6 @@ For every orchestration cycle the following information is recorded.
 
 Examples:
 
-- Continue Execution
 - Re-plan
 - Clarification Required
 - Generate Response
@@ -5662,11 +5775,11 @@ Dynamic runtime collaboration.
 
 ### Clarification
 
-Execution pauses.
+Agent run terminates after natural-language clarification question.
 
-Owner responds.
+Owner responds in a new message.
 
-Execution resumes correctly.
+Fresh orchestration run replans from conversation turns.
 
 ---
 
@@ -5836,9 +5949,9 @@ The implementation must demonstrate that:
 
 - reasoning and deterministic execution remain separated,
 - execution adapts to changing runtime conditions,
-- clarification pauses and later resumes execution correctly,
-- replanning occurs only from verified business facts,
-- responses remain fully grounded.
+- clarification terminates the run and continues via conversation reconstruction on the next message,
+- replanning occurs only from verified business facts and plan artifacts,
+- responses remain fully grounded (faithfulness verification before delivery),
 
 ---
 
@@ -6145,7 +6258,7 @@ This production-first engineering approach minimizes integration risk, exposes a
 
 ## 6.17 Runtime Architecture
 
-The Global Orchestrator is implemented as a Cloudflare Agent (with CLoudflare agent SDK which is a runtime + harness, unlike other sdk whick solves for harness only) executing inside the Store Durable Object.
+The Global Orchestrator is implemented inside the Store Durable Object using an explicit TypeScript harness (`orchestrate()`, execution engine, capability registry). The architecture aligns with the Cloudflare Agents SDK model (runtime + harness), but **this codebase composes the harness directly** with `await`, SQLite, and work-queue alarms rather than delegating loop ownership to SDK fibers — per production alignment in Component 3.
 
 Unlike traditional backend services, the Global Orchestrator is not a long-running server process. It is instantiated as part of each incoming execution request, performs adaptive reasoning for that execution and then terminates. The Durable Object provides the persistent execution environment while the Global Orchestrator provides the adaptive reasoning capability.
 
@@ -6256,7 +6369,7 @@ Execution Terminates
 
 The orchestrator exists only for the duration of a single execution cycle.
 
-No **in-memory** execution-specific state survives after the orchestration cycle completes. **Persisted agent state** (trace events, optional checkpoints) does survive in SQLite for audit, replay, and cross-message resume — see §6.18.
+No **in-memory** execution-specific state (L1 `RunContext`) survives after the orchestration cycle completes. **Persisted agent state** (L2 trace events; optional L3 checkpoints) survives in SQLite for audit and future resume — see §6.18. Conversation turns survive for dialogue continuity across runs.
 
 Persistent information remains inside the Durable Object.
 
@@ -6299,12 +6412,10 @@ Provides:
 
 Provides:
 
-- conversation history,
-- clarification state,
-- owner preferences,
-- active objectives.
+- conversation history (user and assistant turns),
+- owner preferences and shop profile snapshot.
 
-The orchestrator consumes conversation context but never owns it.
+The orchestrator consumes conversation context but never owns it. **Clarification continuity** is reconstructed from turns — there is no separate clarification state table for orchestration.
 
 ---
 
@@ -6425,16 +6536,17 @@ Agent state advances in **monotonic versions** within one `update_id` / `correla
 ```text
 v1  CONTEXT_ASSEMBLED
 v2  CAPABILITY_PLAN          (structured JSON)
-v3  PLAN_VERIFIED            (code gate)
+v3  PLAN_VERIFIED            (code gate) or PLAN_VERIFICATION_FAILED → harness retry
 v4  CAPABILITY_INVOKED       → nested capability trace
-       msp_v1  TOOL_PLAN
-       msp_v2  TOOL_PLAN_VERIFIED
-       msp_v3  TOOL_EXECUTED / CONFIRMATION_*
-v5  DECISION                 (plan + results + action)
+       bc_v1  TOOL_PLAN
+       bc_v2  TOOL_PLAN_VERIFIED or TOOL_PLAN_VERIFICATION_FAILED
+       bc_v3  TOOL_EXECUTED / CONFIRMATION_* 
+v5  DECISION                 (plan + all objective results + action)
 v6  RESPONSE_GENERATED
+v7  FAITHFULNESS_VERIFIED    (or failed + regen attempts)
 ```
 
-Replanning appends new plan versions (v7, v8, …) rather than overwriting prior events. Append-only storage in SQLite matches the Durable Object sequential execution model.
+Replanning appends new plan versions (v8, v9, …) rather than overwriting prior events. Append-only storage in SQLite matches the Durable Object sequential execution model.
 
 Nested Business Capability traces remain **owned by the capability** (observability Layer 3) but are **linked** to Global Orchestrator invocation events via parent references so one query reconstructs the full tree (LangSmith-style run graph).
 
@@ -6450,14 +6562,27 @@ Nested Business Capability traces remain **owned by the capability** (observabil
 
 ### Persistence rules
 
-- Runtime memory during a cycle is not authoritative; **persisted agent trace** is.
-- Every harness transition that matters for explainability should append a trace event with `snapshot_json`.
-- Optional latest snapshot (`orchestration_checkpoints`) may support DO eviction resume; audit source of truth remains append-only events.
-- Conversation turns persist only final assistant output to the owner.
+Agent state uses three storage tiers within the Durable Object:
+
+| Tier | Storage | Role |
+|------|---------|------|
+| **L1** | In-memory `RunContext` during one orchestration run | Authoritative for context assembly **during** the run; discarded when run terminates |
+| **L2** | `agent_trace_events` append-only SQLite | Audit source of truth; survives run end |
+| **L3** | `orchestration_checkpoints` (optional latest snapshot) | Future DO-eviction resume; audit adjunct — append-only L2 remains authoritative |
+
+During a run: read agent context from L1; append trace events to L1 and L2 at each harness transition. After terminal delivery: L1 discarded, L2 retained.
+
+**Per Telegram `message` event:** one work item, one `correlation_id`, one agent run. Strategic replan **within** the same run appends versioned trace events. After clarification delivery, the run ends and the next message starts a **fresh** agent run — continuity from `conversation_turns` only.
+
+Every harness transition that matters for explainability should append a trace event. LLM events store the **full invocation context** (exact system instruction and user payload), **output** (content, parsed artifact), **usage metadata** (token counts when API returns), and **reasoning/thinking blocks** (trace only — never next-step context). Verifier events store structured diagnostics.
+
+Optional `shop_profile_history` records post-confirmation applied writes — distinct from agent trace (audit of business field changes, not harness agency).
+
+Conversation turns persist only final assistant output to the owner.
 
 ### Component status
 
-Component 3 runs the harness in memory; agent state tables exist but are not written at runtime. Component 4 must implement full agent trace persistence. Specification: [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md).
+Component 3 validated the harness in memory with manual production testing. Component 4 implements full `agent_trace_events` persistence, dependency-aware execution, faithfulness verification, and profile change history. Specification: [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md). Goal document: [component_4_harness plan](.cursor/plans/component_4_harness_dbafc641.plan.md).
 
 ---
 
@@ -6606,11 +6731,19 @@ The execution philosophy remains identical.
 
 ## 7.5 Capability Control Loop
 
-Each Business Capability behaves as a small deterministic orchestration engine operating entirely within its own business domain.
+Each Business Capability behaves as a **single-shot deterministic subroutine** operating entirely within its own business domain.
 
-Like the Global Orchestrator, each capability is a **harness**: code owns REASON → VERIFY → EXECUTE → VERIFY; the language model produces plan artifacts only. Capability **agent sub-state** (tool plans, verifications, per-tool events) nests under the Global Orchestrator invocation event in the persisted trace (§6.18).
+Like the Global Orchestrator, each capability shares the **harness skeleton** (REASON → VERIFY → EXECUTE → VERIFY), but it does **not** own a strategic business-objective loop. When post-execution results are incomplete, it returns structured evidence to the Global Orchestrator for strategic replan.
 
-For every assigned business objective, the capability executes the following control loop.
+Capability **agent sub-state** (tool plans, verifications, per-tool events) nests under the Global Orchestrator invocation event in the persisted trace (§6.18).
+
+For every assigned business objective, the capability executes **one pass**:
+
+### Harness retry (BC scope)
+
+When **tool plan verification** fails or **parameter grounding** fails (pre-tool), the capability harness retries planning with verifier diagnostics — up to a configured cap. Goal: fix the **tool plan artifact**. This is not strategic replanning.
+
+When a tool detects missing required fields, it may throw `clarification:*` → `clarification_needed` returned to GO.
 
 ### Step 1 — Understand the Business Objective
 
@@ -6672,11 +6805,15 @@ Execution never proceeds until every dependency has been satisfied.
 
 The capability selects the deterministic tools required to perform each business operation.
 
+Before execution, **parameter grounding** checks verify that tool parameters align with the business objective (deterministic rules — required fields, format validation, substring grounding where applicable). Failures trigger harness retry or `clarification_needed`.
+
 Tools are implementation details of the capability.
 
 The Global Orchestrator never observes or controls this process.
 
 Tool sequencing is entirely owned by the capability.
+
+Sensitive writes invoke **confirmation** (Yes/No buttons) inside the tool — not clarification chat.
 
 ---
 
@@ -7862,16 +7999,18 @@ It never contains business truth.
 
 ### Pending Execution State
 
-Represents execution that has not yet reached a terminal state.
+Represents **business** execution that has not yet reached a terminal state across messages.
 
-Examples include:
+Examples include (future capabilities):
 
 - draft bill currently being constructed,
-- clarification awaiting user response,
-- suspended orchestration,
-- pending business objectives.
+- pending business objectives requiring multi-message business workflows.
 
-Pending Execution State allows execution to resume correctly across independent Telegram messages.
+**Orchestration clarification is not Pending Execution State.** When the owner must supply missing information, the agent run terminates after a natural-language question; the next message replans from `conversation_turns`.
+
+**Confirmation** (`pending_confirmations`) is tool-owned suspension within a **single** work item — not cross-message Pending Execution State.
+
+Pending Execution State for draft bills and similar patterns is deferred until Billing capability implementation.
 
 ---
 
@@ -7923,36 +8062,28 @@ Load Conversation State
 
 ↓
 
-Load Pending Execution State
+Load Owner Preferences and Shop Profile
 
 ↓
 
-Load Owner Preferences
+Assemble Orchestration Context
 
 ↓
 
-Assemble Execution Context
+Global Orchestrator (fresh agent run per message event)
 
 ↓
 
-Global Orchestrator
-
-↓
-
-Execute One Control Loop
-
-↓
-
-Persist Updated State
+Persist Updated State (turns, business data, agent trace)
 
 ↓
 
 Return Response
 ```
 
-No execution depends upon previously existing runtime memory.
+No execution depends upon previously existing in-memory agent state (L1).
 
-Every request reconstructs its execution context from persisted state.
+Every request reconstructs orchestration context from conversation turns and durable owner/business state. Cross-message "resume" for clarification is **replanning from conversation**, not reloading suspended orchestration.
 
 ---
 
@@ -7965,13 +8096,13 @@ Before the Global Orchestrator begins reasoning, the Conversation Manager assemb
 The assembled context contains:
 
 - current Telegram message,
-- relevant conversation state,
-- pending execution state,
-- active clarification (if any),
-- owner preferences,
-- verified business facts required by the current execution.
+- conversation turns for the active session,
+- owner preferences and shop profile snapshot,
+- correlation identifiers for this work item.
 
-Only context relevant to the current business objective is supplied.
+Business facts required for reasoning are obtained during the orchestration run via capability execution — not pre-loaded as stale orchestration state.
+
+Only context relevant to the current message is supplied. See §1 Context Engineering.
 
 Entire conversation histories are never forwarded blindly to the language model.
 
@@ -7995,17 +8126,13 @@ Business Capabilities never read or modify preference storage directly.
 
 ## Clarification Recovery
 
-Clarification is treated as suspended execution rather than conversational history.
+Clarification continuity is provided by **conversation state**, not by suspended orchestration.
 
-When clarification is requested, the Conversation Manager persists:
+When clarification is requested, the assistant turn (natural-language question) is persisted to `conversation_turns`. No separate clarification checkpoint is written for orchestration suspend/resume.
 
-- originating execution,
-- originating business objective,
-- requesting Business Capability,
-- required information,
-- current execution checkpoint.
+When the owner replies, the Conversation Manager loads turns and the Global Orchestrator begins a **fresh agent run** that replans from the full transcript. Agent trace from the prior run remains in `agent_trace_events` for audit but is not loaded into the new run's L1 context except indirectly via conversation text.
 
-When the owner replies, the Conversation Manager reconstructs the suspended execution and resumes orchestration from the appropriate point rather than beginning a completely new reasoning process.
+**Confirmation** recovery uses `pending_confirmations` within the same work item — see §6.9.
 
 ---
 
@@ -8100,12 +8227,11 @@ The Conversation Manager is accepted only after demonstrating correct behaviour 
 
 Validation scenarios include:
 
-- multi-turn bill construction,
-- clarification followed by successful execution,
+- multi-turn bill construction (future),
+- clarification turn followed by successful execution on a subsequent message (conversation reconstruction),
 - owner preference persistence across independent conversations,
 - Durable Object activation with successful state reconstruction,
 - Worker restart with successful conversation recovery,
-- suspended execution resuming correctly after later Telegram messages,
 - `/new chat` clearing conversational state while preserving business state and owner preferences.
 
 The implementation is considered complete only when every orchestration cycle can be reconstructed deterministically regardless of Durable Object lifetime.
@@ -8642,12 +8768,15 @@ Owned by the observability / runtime trace path (written during orchestration; q
 Examples include:
 
 - versioned harness events per `update_id`,
-- capability plan and tool plan snapshots,
-- verification outcomes,
+- full LLM invocation context and output per step,
+- verification outcomes and diagnostics,
 - decision and replan versions,
-- parent–child links to nested capability traces.
+- parent–child links to nested capability traces,
+- Gemini usage metadata and reasoning blocks (trace only).
 
 Agent state exists to reconstruct **agency** — what the harness did and why — not owner dialogue. See §6.18 and [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md).
+
+**Distinct from:** application structured logs (`wrangler tail` / Cloudflare Observability) and `shop_profile_history` (post-confirmation business audit).
 
 ---
 
@@ -8881,6 +9010,14 @@ Instead, it is treated as a highly capable implementation engineer operating wit
 The architecture, invariants, acceptance criteria and verification strategy always remain the source of truth.
 
 Every implementation decision must be traceable back to those documents.
+
+Three implementation disciplines govern agent systems in this project — defined in §1:
+
+- **Context engineering** — per-LLM-call payload design
+- **Harness engineering** — deterministic code around the model
+- **Loop engineering** — who owns strategic replan vs harness retry
+
+Production-first validation (deployed Cloudflare + live Telegram) is mandatory before a component is accepted — see §6.16 and this chapter's Production-First Testing section.
 
 ---
 
@@ -9579,20 +9716,22 @@ The final conversational response may then inform the owner that the requested d
 
 The architecture has intentionally been designed independently of any specific agent framework.
 
-It naturally maps onto modern agent harnesses.
+It naturally maps onto modern agent harnesses, but **this implementation composes the harness in TypeScript** rather than delegating loop ownership to an SDK.
 
 The mapping is as follows.
 
 
-| Architectural Component | Agent Harness Equivalent |
-| ----------------------- | ------------------------ |
-| Global Orchestrator     | Primary Agent            |
-| Business Capability     | Sub-agent or Skill       |
-| Deterministic Tool      | Tool / Function          |
-| Conversation Manager    | External Memory          |
-| Verification Gates      | Post-tool Validation     |
-| Runtime Control Loop    | Agent Execution Loop     |
+| Architectural Component | Agent Harness Equivalent | Notes |
+| ----------------------- | ------------------------ | ----- |
+| Global Orchestrator | Primary harness loop | Only strategic replan owner |
+| Business Capability | Sub-routine / skill (single shot) | Not a nested strategic agent loop |
+| Deterministic Tool | Tool / Function | Confirmation tool-owned |
+| Conversation Manager | Product dialogue memory | Owner turns — not agent trace |
+| Agent trace (`agent_trace_events`) | Run graph / spans | Engineering audit — see §6.18 |
+| Verification Gates | Post-plan and post-execution validation | Layers 1–3 |
+| Runtime Control Loop | Harness-implemented loop | Loop engineering in code, not ReAct prompt |
 
+Implementation disciplines (§1): **context engineering** (per-call payloads), **harness engineering** (code boundaries), **loop engineering** (GO vs BC retry semantics).
 
 This separation ensures that the architecture remains portable across Cloudflare Agents, Claude Agent SDK, Deep Agents, Vercel AI SDK or equivalent frameworks without changing its fundamental design.
 
@@ -9612,7 +9751,8 @@ The architecture explicitly satisfies the following production requirements.
 | Business correctness       | Deterministic Business Capabilities |
 | Grounding                  | Verified Business Facts             |
 | Faithfulness               | Faithfulness Verification           |
-| Multi-turn execution       | Conversation Manager                |
+| Multi-turn execution       | Conversation Manager + fresh agent run per message |
+| Agent audit / replay       | Agent trace events (§6.18)                         |
 | Persistent memory          | State Reconstruction                |
 | Oversell protection        | Inventory Capability                |
 | Atomic finalization        | Billing + Inventory                 |

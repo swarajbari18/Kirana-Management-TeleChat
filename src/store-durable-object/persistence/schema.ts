@@ -85,3 +85,26 @@ export const orchestrationCheckpoints = sqliteTable("orchestration_checkpoints",
   snapshotJson: text("snapshot_json").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+export const agentTraceEvents = sqliteTable("agent_trace_events", {
+  eventId: text("event_id").primaryKey(),
+  updateId: integer("update_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  seq: integer("seq").notNull(),
+  parentEventId: text("parent_event_id"),
+  layer: text("layer").notNull(),
+  component: text("component").notNull(),
+  stage: text("stage").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const shopProfileHistory = sqliteTable("shop_profile_history", {
+  id: text("id").primaryKey(),
+  updateId: integer("update_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  field: text("field").notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  appliedAt: text("applied_at").notNull(),
+});

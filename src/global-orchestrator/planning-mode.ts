@@ -1,53 +1,90 @@
 import { getCapabilityDescriptions } from "../capability-registry/index.js";
+import { GEMINI_MODEL } from "./constants.js";
+import {
+  generateJsonWithMeta,
+  type GeminiInvocationResult,
+} from "./gemini-client.js";
+import type { RunContext } from "../store-durable-object/agent-state/run-context.js";
 import type {
   OrchestrationContext,
   StructuredCapabilityPlan,
 } from "./types.js";
-import { generateJson } from "./gemini-client.js";
 
-const SYSTEM_PROMPT = `You are the Global Orchestrator for a Kirana shop assistant.
-You plan which business capabilities should handle user objectives.
-You NEVER call tools directly — only assign objectives to registered capabilities.
+const SYSTEM_PROMPT = `You are the Planning component of the Global Orchestrator for a Kirana shop assistant.
 
-Registered capabilities:
+Your job: from the shop owner's conversation and business context, produce a JSON execution plan.
+
+Thought process (one reasoning flow — may be a single response):
+1. Understand the owner's business intent — what outcome do they want?
+2. Express that intent as one or more business objectives (outcomes, not tools or implementation).
+3. Assign each objective to exactly one registered capability. Stop at the capability boundary.
+
+You do NOT call tools. You do NOT execute operations. You ONLY output the plan JSON.
+
+Registered capabilities (reference — code enforces validity):
 ${getCapabilityDescriptions()}
 
-Output JSON with shape:
+Output JSON shape:
 {
   "objectives": [
     {
       "objectiveId": "string",
       "objectiveDescription": "string",
       "capabilityId": "my_shop_profile",
-      "dependencies": []
+      "dependencies": ["other_objective_id_if_needed"]
     }
   ]
 }
 
-Rules:
-- Use capabilityId "my_shop_profile" for shop identity, GST/tax registration, and agent instructions.
-- Clarification is conversational — do not plan confirmation flows here.
-- One objective per distinct user intent when possible.`;
+On replan or retry, use the evidence in the conversation context (prior plan, results, decisions, or verifier feedback) to revise intent, objectives, or assignments. Do not invent business facts.
+
+Output valid JSON only.`;
+
+export interface PlanCapabilitiesResult {
+  plan: StructuredCapabilityPlan;
+  businessIntent?: string;
+  llmTrace: GeminiInvocationResult<StructuredCapabilityPlan>;
+}
 
 export async function planCapabilities(
   ctx: OrchestrationContext,
-): Promise<StructuredCapabilityPlan> {
-  const conversation = ctx.turns
-    .map((t) => `${t.role}: ${t.contextText}`)
-    .join("\n");
+  runContext: RunContext,
+  mode: "initial" | "strategic_replan" | "harness_retry" = "initial",
+  harnessRetry?: import("./execution-engine/plan-verification.js").PlanVerificationResult,
+): Promise<PlanCapabilitiesResult> {
+  const userPrompt = runContext.planningContextSlice(mode, harnessRetry);
 
-  const profileSummary = JSON.stringify(ctx.ownerProfile);
-
-  const userPrompt = `Store initialized: ${ctx.storeInitialized}
-Owner profile: ${profileSummary}
-Latest user message: ${ctx.inbound.text}
-
-Conversation history:
-${conversation}`;
-
-  return generateJson<StructuredCapabilityPlan>(
+  const llmTrace = await generateJsonWithMeta<StructuredCapabilityPlan>(
     ctx.geminiApiKey,
     SYSTEM_PROMPT,
     userPrompt,
   );
+
+  const businessIntent =
+    llmTrace.result.objectives?.[0]?.objectiveDescription ??
+    ctx.inbound.text;
+
+  return {
+    plan: llmTrace.result,
+    businessIntent,
+    llmTrace,
+  };
+}
+
+export function buildLlmTracePayload(
+  step: string,
+  llmTrace: GeminiInvocationResult<unknown>,
+): object {
+  return {
+    step,
+    model: GEMINI_MODEL,
+    invocation: llmTrace.invocation,
+    output: {
+      content: llmTrace.rawContent,
+      reasoning: llmTrace.reasoning,
+      parsed: llmTrace.result,
+    },
+    usage: llmTrace.usage,
+    durationMs: llmTrace.durationMs,
+  };
 }

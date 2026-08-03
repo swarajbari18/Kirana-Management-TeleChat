@@ -1,6 +1,7 @@
 import type { RuntimePorts } from "../store-durable-object/runtime-ports/types.js";
 import type { StoreDatabase } from "../store-durable-object/persistence/db.js";
 import type { OrchestrationContext } from "../global-orchestrator/types.js";
+import type { RunContext } from "../store-durable-object/agent-state/run-context.js";
 import { executeMyShopProfile } from "../my-shop-profile/index.js";
 
 export interface BusinessObjective {
@@ -13,6 +14,8 @@ export type CapabilityHandler = (
   ctx: OrchestrationContext,
   runtimePorts: RuntimePorts,
   db: StoreDatabase,
+  runContext?: RunContext,
+  parentEventId?: string,
 ) => Promise<import("../my-shop-profile/types.js").CapabilityResult>;
 
 const registry: Record<string, CapabilityHandler> = {
@@ -29,6 +32,8 @@ export async function invokeCapability(
   ctx: OrchestrationContext,
   runtimePorts: RuntimePorts,
   db: StoreDatabase,
+  runContext?: RunContext,
+  parentEventId?: string,
 ) {
   const handler = registry[capabilityId];
   if (!handler) {
@@ -37,5 +42,5 @@ export async function invokeCapability(
       diagnostics: `Unknown capability: ${capabilityId}`,
     };
   }
-  return handler(objective, ctx, runtimePorts, db);
+  return handler(objective, ctx, runtimePorts, db, runContext, parentEventId);
 }

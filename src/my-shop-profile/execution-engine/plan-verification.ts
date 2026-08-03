@@ -4,6 +4,7 @@ import { isValidGstin } from "../validation/gstin.js";
 export interface ToolPlanVerificationResult {
   valid: boolean;
   reason?: string;
+  diagnostics?: string[];
 }
 
 const KNOWN_TOOLS = new Set([
@@ -14,19 +15,24 @@ const KNOWN_TOOLS = new Set([
 ]);
 
 export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationResult {
+  const diagnostics: string[] = [];
+
   if (!plan.operations || plan.operations.length === 0) {
-    return { valid: false, reason: "Plan has no operations" };
+    diagnostics.push("Plan has no operations");
+    return { valid: false, reason: diagnostics[0], diagnostics };
   }
 
   const operationIds = new Set<string>();
 
   for (const op of plan.operations) {
     if (!KNOWN_TOOLS.has(op.toolName)) {
-      return { valid: false, reason: `Unknown tool: ${op.toolName}` };
+      diagnostics.push(`Unknown tool: ${op.toolName}`);
+      return { valid: false, reason: diagnostics[0], diagnostics };
     }
 
     if (operationIds.has(op.operationId)) {
-      return { valid: false, reason: `Duplicate operationId ${op.operationId}` };
+      diagnostics.push(`Duplicate operationId ${op.operationId}`);
+      return { valid: false, reason: diagnostics[0], diagnostics };
     }
     operationIds.add(op.operationId);
 
@@ -34,12 +40,14 @@ export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationRe
       const params = op.parameters;
       const gstRegistered = params.gstRegistered;
       if (typeof gstRegistered !== "boolean") {
-        return { valid: false, reason: "gstRegistered must be boolean" };
+        diagnostics.push("gstRegistered must be boolean");
+        return { valid: false, reason: diagnostics[0], diagnostics };
       }
       if (gstRegistered) {
         const gstin = params.gstin;
         if (typeof gstin !== "string" || !isValidGstin(gstin)) {
-          return { valid: false, reason: "Valid gstin required when gstRegistered is true" };
+          diagnostics.push("Valid gstin required when gstRegistered is true");
+          return { valid: false, reason: diagnostics[0], diagnostics };
         }
       }
     }

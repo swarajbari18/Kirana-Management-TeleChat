@@ -5,6 +5,7 @@ import {
   getShopProfile,
   updateShopProfile,
 } from "../../store-durable-object/persistence/repositories/shop-profile-repository.js";
+import { appendShopProfileHistory } from "../../store-durable-object/persistence/repositories/shop-profile-history-repository.js";
 import {
   finalizeConfirmationResolution,
   persistPendingConfirmation,
@@ -39,9 +40,14 @@ export async function proposeTaxRegistrationUpdate(
   const current = await getShopProfile(db);
 
   if (current.completeAutonomy) {
+    const before = await getShopProfile(db);
     const updated = await updateShopProfile(db, {
       gstRegistered: input.gstRegistered,
       gstin: input.gstRegistered ? input.gstin ?? null : null,
+    });
+    await appendShopProfileHistory(db, before, updated, {
+      updateId: input.updateId,
+      correlationId: input.correlationId,
     });
     return {
       gstRegistered: updated.gstRegistered,
@@ -87,9 +93,14 @@ export async function proposeTaxRegistrationUpdate(
       confirmationId,
       status: "approved",
     });
+    const before = await getShopProfile(db);
     const updated = await updateShopProfile(db, {
       gstRegistered: input.gstRegistered,
       gstin: input.gstRegistered ? input.gstin ?? null : null,
+    });
+    await appendShopProfileHistory(db, before, updated, {
+      updateId: input.updateId,
+      correlationId: input.correlationId,
     });
     return {
       gstRegistered: updated.gstRegistered,

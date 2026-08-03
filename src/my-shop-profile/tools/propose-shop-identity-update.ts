@@ -5,6 +5,7 @@ import {
   getShopProfile,
   updateShopProfile,
 } from "../../store-durable-object/persistence/repositories/shop-profile-repository.js";
+import { appendShopProfileHistory } from "../../store-durable-object/persistence/repositories/shop-profile-history-repository.js";
 import {
   finalizeConfirmationResolution,
   persistPendingConfirmation,
@@ -35,10 +36,17 @@ export async function proposeShopIdentityUpdate(
       input.ownerName !== current.ownerName);
 
   if (!replacingExisting || current.completeAutonomy) {
+    const before = await getShopProfile(db);
     const updated = await updateShopProfile(db, {
       shopName: nextShopName,
       ownerName: nextOwnerName,
     });
+    if (replacingExisting || input.shopName !== undefined || input.ownerName !== undefined) {
+      await appendShopProfileHistory(db, before, updated, {
+        updateId: input.updateId,
+        correlationId: input.correlationId,
+      });
+    }
     return {
       shopName: updated.shopName,
       ownerName: updated.ownerName,
@@ -77,9 +85,14 @@ export async function proposeShopIdentityUpdate(
       confirmationId,
       status: "approved",
     });
+    const before = await getShopProfile(db);
     const updated = await updateShopProfile(db, {
       shopName: nextShopName,
       ownerName: nextOwnerName,
+    });
+    await appendShopProfileHistory(db, before, updated, {
+      updateId: input.updateId,
+      correlationId: input.correlationId,
     });
     return {
       shopName: updated.shopName,

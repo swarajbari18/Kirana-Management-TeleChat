@@ -50,4 +50,29 @@ describe("gemini production integration", () => {
     },
     30_000,
   );
+
+  it.skipIf(!GEMINI_API_KEY)(
+    `G3 configured model ${GEMINI_MODEL} returns usage metadata (${skipReason})`,
+    async () => {
+      const { generateJsonWithMeta } = await import(
+        "../global-orchestrator/gemini-client.js"
+      );
+      const meta = await generateJsonWithMeta<Record<string, unknown>>(
+        GEMINI_API_KEY!,
+        'Output JSON: { "ok": true }',
+        "Confirm.",
+      );
+      expect(meta.result).toBeTypeOf("object");
+      expect(meta.durationMs).toBeGreaterThan(0);
+      expect(meta.invocation.systemInstruction).toContain("JSON");
+      expect(meta.rawContent.length).toBeGreaterThan(0);
+      // usage may be absent on some API responses — optional fields
+      if (meta.usage) {
+        expect(
+          meta.usage.totalTokenCount ?? meta.usage.promptTokenCount,
+        ).toBeDefined();
+      }
+    },
+    30_000,
+  );
 });

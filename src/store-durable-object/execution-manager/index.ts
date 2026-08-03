@@ -3,6 +3,7 @@ import type { ApplicationRequest } from "../../worker-telegram-adapter/contracts
 import type { ConfirmationCallbackRequest } from "../../worker-telegram-adapter/contracts/index.js";
 import type { ExecutionResult } from "../../worker-telegram-adapter/contracts/index.js";
 import { orchestrate } from "../../global-orchestrator/index.js";
+import { createRunContext } from "../agent-state/run-context.js";
 import {
   WELCOME_MESSAGE,
   WELCOME_MESSAGE_FIRST_START,
@@ -123,6 +124,15 @@ export async function processWorkItem(
       participatingComponents.push("start-handler");
     } else {
       participatingComponents.push("global-orchestrator");
+      const runContext = createRunContext(db, {
+        ...conversationContext,
+        storeId: request.storeId,
+        correlationId: ctx.correlationId,
+        updateId: request.transport.updateId,
+        chatId: request.delivery.chatId,
+        inbound: request.inbound,
+        geminiApiKey: env.GEMINI_API_KEY,
+      });
       result = await orchestrate(
         {
           ...conversationContext,
@@ -135,6 +145,7 @@ export async function processWorkItem(
         },
         runtimePorts,
         db,
+        runContext,
       );
     }
 
@@ -163,6 +174,8 @@ export async function processWorkItem(
     }
 
     const resultJson = deliver ? JSON.stringify(result) : null;
+    const orchestrationFailure =
+      result.status === "error" ? "orchestration_error" : null;
 
     await recordLedgerEntry(db, {
       updateId: request.transport.updateId,
@@ -171,6 +184,7 @@ export async function processWorkItem(
       handedToWorker: deliver,
       telegramDelivered: deliver,
       resultJson,
+      failureReason: orchestrationFailure,
       completedAt: new Date().toISOString(),
     });
 

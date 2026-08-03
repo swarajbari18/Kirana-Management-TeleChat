@@ -1,36 +1,72 @@
 import type { BusinessObjective } from "../capability-registry/index.js";
 import type { OrchestrationContext } from "../global-orchestrator/types.js";
+import { GEMINI_MODEL, MAX_BC_TOOL_PLAN_VERIFY_RETRIES } from "../global-orchestrator/constants.js";
+import { generateJsonWithMeta } from "../global-orchestrator/gemini-client.js";
+import type { RunContext } from "../store-durable-object/agent-state/run-context.js";
 import type { RuntimePorts } from "../store-durable-object/runtime-ports/types.js";
 import type { StoreDatabase } from "../store-durable-object/persistence/db.js";
-import { generateJson } from "../global-orchestrator/gemini-client.js";
 import type { CapabilityResult, StructuredToolPlan } from "./types.js";
-import { sortByDependencies, verifyToolPlan } from "./execution-engine/plan-verification.js";
+import {
+  sortByDependencies,
+  verifyToolPlan,
+} from "./execution-engine/plan-verification.js";
+import { parameterGroundingCheck } from "./parameter-grounding.js";
 import { readShopProfile } from "./tools/read-shop-profile.js";
 import { proposeShopIdentityUpdate } from "./tools/propose-shop-identity-update.js";
 import { proposeTaxRegistrationUpdate } from "./tools/propose-tax-registration-update.js";
 import { updateInstructionPreference } from "./tools/update-instruction-preference.js";
 
-const TOOL_SYSTEM_PROMPT = `You plan business operations for My Shop Profile capability.
-Available tools:
-- read_shop_profile: {} — read current profile
-- propose_shop_identity_update: { shopName?: string, ownerName?: string }
-- propose_tax_registration_update: { gstRegistered: boolean, gstin?: string } — GSTIN required when gstRegistered true
-- update_instruction_preference: { instruction: string, mode?: "append"|"replace" }
+const TOOL_SYSTEM_PROMPT = `You are the Planning component of the My Shop Profile capability.
 
-Output JSON: { "operations": [{ "operationId", "operationDescription", "toolName", "parameters", "dependencies": [] }] }`;
+Your job: from a business objective assigned by the Global Orchestrator, produce a JSON tool execution plan.
+
+Thought process:
+1. Understand the business objective — what outcome must this capability achieve?
+2. Determine which business operations are needed (read, propose update, instruction change, etc.).
+3. Map operations to tools and parameters. Order by dependencies. Stop at the tool boundary.
+
+You do NOT execute tools. You ONLY output the plan JSON.
+
+Available tools (reference — code enforces):
+- read_shop_profile: {}
+- propose_shop_identity_update: { shopName?, ownerName? }
+- propose_tax_registration_update: { gstRegistered, gstin? }
+- update_instruction_preference: { instruction, mode?: "append"|"replace" }
+
+Output JSON: { "operations": [{ operationId, operationDescription, toolName, parameters, dependencies }] }
+
+On re-invoke, use prior tool plan and prior results in context to revise — what was attempted and what happened.
+
+Output valid JSON only.`;
 
 async function planTools(
   ctx: OrchestrationContext,
   objective: BusinessObjective,
-): Promise<StructuredToolPlan> {
-  const userPrompt = `Objective: ${objective.description}
-User message: ${ctx.inbound.text}
-Profile: ${JSON.stringify(ctx.ownerProfile)}`;
+  runContext: RunContext | undefined,
+  priorPlan?: unknown,
+  priorResults?: CapabilityResult,
+  harnessDiagnostic?: string,
+): Promise<import("../global-orchestrator/gemini-client.js").GeminiInvocationResult<StructuredToolPlan>> {
+  const parts: string[] = [
+    `Objective: ${objective.description}`,
+    `User message: ${ctx.inbound.text}`,
+    `Profile: ${JSON.stringify(ctx.ownerProfile)}`,
+  ];
 
-  return generateJson<StructuredToolPlan>(
+  if (priorPlan) {
+    parts.push(`Prior tool plan:\n${JSON.stringify(priorPlan, null, 2)}`);
+  }
+  if (priorResults) {
+    parts.push(`Prior execution results:\n${JSON.stringify(priorResults, null, 2)}`);
+  }
+  if (harnessDiagnostic) {
+    parts.push(`Plan verification or grounding feedback: ${harnessDiagnostic}`);
+  }
+
+  return generateJsonWithMeta<StructuredToolPlan>(
     ctx.geminiApiKey,
     TOOL_SYSTEM_PROMPT,
-    userPrompt,
+    parts.join("\n\n"),
   );
 }
 
@@ -63,6 +99,8 @@ async function executeTool(
       return updateInstructionPreference(db, {
         instruction: step.parameters.instruction as string,
         mode: step.parameters.mode as "append" | "replace" | undefined,
+        updateId: ctx.updateId,
+        correlationId: ctx.correlationId,
       });
     default:
       throw new Error(`Unknown tool: ${step.toolName}`);
@@ -95,15 +133,91 @@ export async function executeMyShopProfile(
   ctx: OrchestrationContext,
   runtimePorts: RuntimePorts,
   db: StoreDatabase,
+  runContext?: RunContext,
+  parentEventId?: string,
 ): Promise<CapabilityResult> {
   try {
-    const plan = await planTools(ctx, objective);
-    const verification = verifyToolPlan(plan);
-    if (!verification.valid) {
+    const priorPlan = runContext?.getBcPriorPlan(objective.objectiveId);
+    const priorResults = runContext?.getBcPriorResults(objective.objectiveId);
+
+    let plan: StructuredToolPlan | null = null;
+    let verification: import("./execution-engine/plan-verification.js").ToolPlanVerificationResult = {
+      valid: false,
+    };
+    let harnessAttempt = 0;
+    let lastDiagnostic: string | undefined;
+
+    while (harnessAttempt < MAX_BC_TOOL_PLAN_VERIFY_RETRIES) {
+      const llmTrace = await planTools(
+        ctx,
+        objective,
+        runContext,
+        priorPlan,
+        priorResults,
+        lastDiagnostic,
+      );
+
+      if (runContext) {
+        await runContext.traceLlmInvocation(
+          "capability",
+          "my_shop_profile",
+          "TOOL_PLAN",
+          {
+            step: "bc_plan",
+            model: GEMINI_MODEL,
+            invocation: llmTrace.invocation,
+            output: {
+              content: llmTrace.rawContent,
+              reasoning: llmTrace.reasoning,
+              parsed: llmTrace.result,
+            },
+            usage: llmTrace.usage,
+            durationMs: llmTrace.durationMs,
+          },
+          parentEventId,
+        );
+      }
+
+      plan = llmTrace.result;
+      verification = verifyToolPlan(plan);
+
+      if (verification.valid) {
+        if (runContext) {
+          await runContext.appendTrace(
+            "verify",
+            "my_shop_profile",
+            "TOOL_PLAN_VERIFIED",
+            { operationCount: plan.operations.length },
+            parentEventId,
+          );
+        }
+        break;
+      }
+
+      if (runContext) {
+        await runContext.appendTrace(
+          "verify",
+          "my_shop_profile",
+          "TOOL_PLAN_VERIFICATION_FAILED",
+          {
+            diagnostics: verification.diagnostics ?? [verification.reason],
+          },
+          parentEventId,
+        );
+      }
+
+      lastDiagnostic = (verification.diagnostics ?? [verification.reason]).join(
+        "; ",
+      );
+      harnessAttempt += 1;
+    }
+
+    if (!plan || !verification.valid) {
       return {
         status: "clarification_needed",
         reason: verification.reason ?? "Invalid tool plan",
-        requiredInfo: verification.reason ?? "Please provide more details",
+        requiredInfo:
+          verification.reason ?? "Please provide more details about your request.",
       };
     }
 
@@ -111,8 +225,107 @@ export async function executeMyShopProfile(
     const facts: Record<string, unknown> = {};
 
     for (const step of ordered) {
+      let groundingAttempt = 0;
+      let grounding = parameterGroundingCheck(objective.description, step);
+
+      while (!grounding.valid && groundingAttempt < MAX_BC_TOOL_PLAN_VERIFY_RETRIES) {
+        if (runContext) {
+          await runContext.appendTrace(
+            "verify",
+            "my_shop_profile",
+            "PARAMETER_GROUNDING_FAILED",
+            { diagnostic: grounding.diagnostic, toolName: step.toolName },
+            parentEventId,
+          );
+        }
+
+        const llmTrace = await planTools(
+          ctx,
+          objective,
+          runContext,
+          plan,
+          undefined,
+          grounding.diagnostic,
+        );
+
+        if (runContext) {
+          await runContext.traceLlmInvocation(
+            "capability",
+            "my_shop_profile",
+            "TOOL_PLAN",
+            {
+              step: "bc_plan_grounding_retry",
+              model: GEMINI_MODEL,
+              invocation: llmTrace.invocation,
+              output: {
+                content: llmTrace.rawContent,
+                reasoning: llmTrace.reasoning,
+                parsed: llmTrace.result,
+              },
+              usage: llmTrace.usage,
+              durationMs: llmTrace.durationMs,
+            },
+            parentEventId,
+          );
+        }
+
+        plan = llmTrace.result;
+        const reverify = verifyToolPlan(plan);
+        if (!reverify.valid) {
+          return {
+            status: "clarification_needed",
+            reason: reverify.reason ?? "Invalid tool plan after grounding retry",
+            requiredInfo:
+              grounding.userMessage ??
+              "Please provide more details about your request.",
+          };
+        }
+
+        const reordered = sortByDependencies(plan.operations);
+        const retriedStep = reordered.find(
+          (op) => op.operationId === step.operationId,
+        );
+        if (retriedStep) {
+          grounding = parameterGroundingCheck(objective.description, retriedStep);
+        } else {
+          break;
+        }
+        groundingAttempt += 1;
+      }
+
+      if (!grounding.valid) {
+        return {
+          status: "clarification_needed",
+          reason: grounding.diagnostic ?? "parameter_grounding_failed",
+          requiredInfo:
+            grounding.userMessage ??
+            "Please provide more details about your request.",
+        };
+      }
+
       const result = await executeTool(step, ctx, runtimePorts, db);
       Object.assign(facts, result);
+
+      if (runContext) {
+        await runContext.appendTrace(
+          "capability",
+          "my_shop_profile",
+          "TOOL_EXECUTED",
+          {
+            toolName: step.toolName,
+            parameters: step.parameters,
+            resultSummary: Object.keys(result),
+          },
+          parentEventId,
+        );
+      }
+    }
+
+    if (runContext) {
+      runContext.storeBcInvocation(objective.objectiveId, plan, {
+        status: "completed",
+        verifiedFacts: facts,
+      });
     }
 
     return { status: "completed", verifiedFacts: facts };

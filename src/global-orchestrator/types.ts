@@ -36,9 +36,10 @@ export interface StructuredCapabilityPlan {
   objectives: CapabilityPlanStep[];
 }
 
-export type DecisionAction = "respond" | "clarify";
+export type DecisionAction = "replan" | "clarify" | "respond";
 
 export interface DecisionResult {
   action: DecisionAction;
-  clarificationQuestion?: string;
+  rationale: string;
+  clarificationFocus?: string;
 }
