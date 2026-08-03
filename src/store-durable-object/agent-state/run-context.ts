@@ -2,13 +2,23 @@ import type { CapabilityResult } from "../../my-shop-profile/types.js";
 import type { StoreDatabase } from "../persistence/db.js";
 import { insertTraceEvent } from "../persistence/repositories/agent-trace-repository.js";
 import type {
-  CapabilityPlanStep,
   DecisionResult,
   OrchestrationContext,
   StructuredCapabilityPlan,
 } from "../../global-orchestrator/types.js";
 import type { PlanVerificationResult } from "../../global-orchestrator/execution-engine/plan-verification.js";
 import type { ExecutionPhaseResult } from "../../global-orchestrator/execution-engine/types.js";
+import type {
+  FactCatalogEntry,
+  OutcomeCatalogEntry,
+  OutcomeRecord,
+  VerifiedFactRecord,
+} from "../../global-orchestrator/verified-facts/types.js";
+import {
+  buildOutcomeCatalogFromPhaseResult,
+  buildRegistryFromPhaseResult,
+  factsForDecision,
+} from "../../global-orchestrator/verified-facts/registry-builder.js";
 
 export type TraceStage =
   | "CONTEXT_ASSEMBLED"
@@ -26,7 +36,6 @@ export type TraceStage =
   | "CONFIRMATION_RESOLVED"
   | "DECISION"
   | "RESPONSE_GENERATED"
-  | "FAITHFULNESS_EXTRACT"
   | "FAITHFULNESS_VERIFIED"
   | "FAITHFULNESS_FAILED"
   | "ORCHESTRATION_ERROR";
@@ -37,13 +46,6 @@ export type TraceLayer =
   | "verify"
   | "faithfulness"
   | "transport";
-
-export interface CanonicalFact {
-  entity: string;
-  attribute: string;
-  value: string;
-  source: string;
-}
 
 export type ObjectiveStatus =
   | "pending"
@@ -87,6 +89,10 @@ export interface BcInvocationState {
   priorResults?: CapabilityResult;
 }
 
+function stripNewCommandPrefix(text: string): string {
+  return text.replace(/^\/new\s*/i, "").trim();
+}
+
 export class RunContext {
   readonly correlationId: string;
   readonly updateId: number;
@@ -102,7 +108,8 @@ export class RunContext {
   >();
   replanHistory: ReplanHistoryEntry[] = [];
   bcInvocationState = new Map<string, BcInvocationState>();
-  verifiedFactsAccumulator: CanonicalFact[] = [];
+  verifiedFactRegistry = new Map<string, VerifiedFactRecord>();
+  outcomeRegistry = new Map<string, OutcomeRecord>();
   priorDecisions: DecisionResult[] = [];
   nextSeq = 1;
   contextAssembled = false;
@@ -116,6 +123,14 @@ export class RunContext {
     this.storeId = ctx.storeId;
   }
 
+  resolveBusinessIntent(): string {
+    if (this.businessIntent?.trim()) {
+      return this.businessIntent.trim();
+    }
+    const stripped = stripNewCommandPrefix(this.ctx.inbound.text);
+    return stripped || this.ctx.inbound.text;
+  }
+
   async ensureContextAssembled(): Promise<void> {
     if (this.contextAssembled) {
       return;
@@ -125,6 +140,31 @@ export class RunContext {
       storeInitialized: this.ctx.storeInitialized,
     });
     this.contextAssembled = true;
+  }
+
+  buildRegistryFromPhaseResult(
+    plan: StructuredCapabilityPlan,
+    phaseResult: ExecutionPhaseResult,
+  ): void {
+    this.verifiedFactRegistry = buildRegistryFromPhaseResult(plan, phaseResult);
+    this.outcomeRegistry = buildOutcomeCatalogFromPhaseResult(phaseResult);
+  }
+
+  factCatalogForResponse(): FactCatalogEntry[] {
+    return [...this.verifiedFactRegistry.values()].map((r) => ({
+      factId: r.factId,
+      catalogLabel: r.catalogLabel,
+      field: r.field,
+      valueType: r.valueType,
+    }));
+  }
+
+  outcomeCatalogForResponse(): OutcomeCatalogEntry[] {
+    return [...this.outcomeRegistry.values()].map((o) => ({
+      outcomeId: o.outcomeId,
+      catalogLabel: o.catalogLabel,
+      kind: o.kind,
+    }));
   }
 
   planningContextSlice(
@@ -143,7 +183,7 @@ export class RunContext {
     ];
 
     if (this.businessIntent) {
-      parts.push(`Business intent: ${this.businessIntent}`);
+      parts.push(`Prior business intent: ${this.businessIntent}`);
     }
 
     if (mode === "strategic_replan") {
@@ -161,9 +201,9 @@ export class RunContext {
       if (lastDecision) {
         parts.push(`Prior decision:\n${JSON.stringify(lastDecision, null, 2)}`);
       }
-      if (this.verifiedFactsAccumulator.length > 0) {
+      if (this.verifiedFactRegistry.size > 0) {
         parts.push(
-          `Verified facts:\n${JSON.stringify(this.verifiedFactsAccumulator)}`,
+          `Verified facts:\n${JSON.stringify(factsForDecision(this.verifiedFactRegistry))}`,
         );
       }
     }
@@ -188,11 +228,11 @@ export class RunContext {
 
   decisionContextSlice(phaseResult: ExecutionPhaseResult): string {
     const parts: string[] = [
-      `Business intent: ${this.businessIntent ?? this.ctx.inbound.text}`,
+      `Business intent: ${this.resolveBusinessIntent()}`,
       `Execution plan:\n${JSON.stringify(this.currentPlan, null, 2)}`,
       `Plan version: ${this.planVersion}`,
       `Objective results:\n${JSON.stringify(phaseResult, null, 2)}`,
-      `Verified facts:\n${JSON.stringify(this.verifiedFactsAccumulator)}`,
+      `Verified facts:\n${JSON.stringify(factsForDecision(this.verifiedFactRegistry))}`,
     ];
 
     if (this.priorDecisions.length > 0) {
@@ -236,7 +276,7 @@ export class RunContext {
       .map(([, v]) => v.result);
 
     return [
-      `Verified facts:\n${JSON.stringify(this.verifiedFactsAccumulator)}`,
+      `Verified facts:\n${JSON.stringify(factsForDecision(this.verifiedFactRegistry))}`,
       `Denied outcomes:\n${JSON.stringify(denied)}`,
       `User message: ${this.ctx.inbound.text}`,
       `Owner instructions: ${JSON.stringify(this.ctx.ownerProfile.instructions)}`,
@@ -276,38 +316,6 @@ export class RunContext {
       priorToolPlan: toolPlan,
       priorResults: result,
     });
-  }
-
-  accumulateVerifiedFacts(result: CapabilityResult): void {
-    if (result.status !== "completed") {
-      return;
-    }
-    const facts = result.verifiedFacts;
-    const mappings: Array<[string, string, unknown]> = [
-      ["shop", "shop_name", facts.shopName],
-      ["shop", "owner_name", facts.ownerName],
-      ["shop", "gstin", facts.gstin],
-      ["shop", "gst_registered", facts.gstRegistered],
-      ["shop", "instructions", facts.instructions],
-    ];
-
-    for (const [entity, attribute, value] of mappings) {
-      if (value !== undefined && value !== null) {
-        this.verifiedFactsAccumulator.push({
-          entity,
-          attribute,
-          value:
-            typeof value === "string"
-              ? value
-              : JSON.stringify(value),
-          source: "my_shop_profile",
-        });
-      }
-    }
-  }
-
-  verifiedFactsFlat(): CanonicalFact[] {
-    return [...this.verifiedFactsAccumulator];
   }
 
   async appendTrace(

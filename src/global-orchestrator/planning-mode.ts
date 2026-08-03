@@ -15,7 +15,7 @@ const SYSTEM_PROMPT = `You are the Planning component of the Global Orchestrator
 Your job: from the shop owner's conversation and business context, produce a JSON execution plan.
 
 Thought process (one reasoning flow — may be a single response):
-1. Understand the owner's business intent — what outcome do they want?
+1. State the owner's business intent — one sentence, what outcome they want (from conversation, not tools).
 2. Express that intent as one or more business objectives (outcomes, not tools or implementation).
 3. Assign each objective to exactly one registered capability. Stop at the capability boundary.
 
@@ -26,6 +26,7 @@ ${getCapabilityDescriptions()}
 
 Output JSON shape:
 {
+  "businessIntent": "string — owner outcome in plain language",
   "objectives": [
     {
       "objectiveId": "string",
@@ -36,13 +37,14 @@ Output JSON shape:
   ]
 }
 
+businessIntent must reflect the user's message (e.g. "fetch my business profile"), NOT repeat a single objectiveDescription verbatim when multiple objectives exist.
+
 On replan or retry, use the evidence in the conversation context (prior plan, results, decisions, or verifier feedback) to revise intent, objectives, or assignments. Do not invent business facts.
 
 Output valid JSON only.`;
 
 export interface PlanCapabilitiesResult {
   plan: StructuredCapabilityPlan;
-  businessIntent?: string;
   llmTrace: GeminiInvocationResult<StructuredCapabilityPlan>;
 }
 
@@ -60,13 +62,8 @@ export async function planCapabilities(
     userPrompt,
   );
 
-  const businessIntent =
-    llmTrace.result.objectives?.[0]?.objectiveDescription ??
-    ctx.inbound.text;
-
   return {
     plan: llmTrace.result,
-    businessIntent,
     llmTrace,
   };
 }

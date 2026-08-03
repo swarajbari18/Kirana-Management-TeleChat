@@ -14,11 +14,9 @@ import {
 import { decideNextAction } from "./decision-mode.js";
 import { executePhase } from "./execution-engine/index.js";
 import { verifyCapabilityPlan } from "./execution-engine/plan-verification.js";
-import { faithfulnessGate } from "./faithfulness/index.js";
-import {
-  planCapabilities,
-} from "./planning-mode.js";
-import { generateResponse } from "./response-generation.js";
+import { verifyGroundedResponse } from "./faithfulness/index.js";
+import { planCapabilities } from "./planning-mode.js";
+import { generateClarifyResponse } from "./response-generation.js";
 import type { OrchestrationContext } from "./types.js";
 
 function terminalSafeOutcome(text: string): ExecutionResult {
@@ -61,9 +59,8 @@ export async function orchestrate(
       );
       let plan = planResult.plan;
 
-      if (planResult.businessIntent) {
-        runContext.businessIntent = planResult.businessIntent;
-      }
+      runContext.businessIntent = plan.businessIntent?.trim() ?? null;
+      runContext.currentPlan = plan;
 
       await runContext.traceLlmInvocation(
         "go",
@@ -82,8 +79,6 @@ export async function orchestrate(
           durationMs: planResult.llmTrace.durationMs,
         },
       );
-
-      runContext.currentPlan = plan;
 
       let verification = verifyCapabilityPlan(plan);
       let harnessAttempt = 0;
@@ -104,6 +99,7 @@ export async function orchestrate(
           verification,
         );
         plan = planResult.plan;
+        runContext.businessIntent = plan.businessIntent?.trim() ?? null;
         runContext.currentPlan = plan;
 
         await runContext.traceLlmInvocation(
@@ -149,6 +145,8 @@ export async function orchestrate(
         runContext,
       );
 
+      runContext.buildRegistryFromPhaseResult(plan, phaseResult);
+
       const { decision, llmTrace: decisionTrace } = await decideNextAction(
         ctx,
         runContext,
@@ -181,11 +179,10 @@ export async function orchestrate(
       }
 
       if (decision.action === "clarify") {
-        const response = await generateResponse(
+        const response = await generateClarifyResponse(
           ctx,
           runContext,
           phaseResult,
-          "clarify",
           decision.clarificationFocus,
         );
 
@@ -210,36 +207,10 @@ export async function orchestrate(
         return deliver(response.text);
       }
 
-      const response = await generateResponse(
+      const finalText = await verifyGroundedResponse(
         ctx,
         runContext,
         phaseResult,
-        "respond",
-      );
-
-      await runContext.traceLlmInvocation(
-        "go",
-        "global_orchestrator",
-        "RESPONSE_GENERATED",
-        {
-          step: "go_response",
-          model: GEMINI_MODEL,
-          invocation: response.llmTrace.invocation,
-          output: {
-            content: response.llmTrace.rawContent,
-            reasoning: response.llmTrace.reasoning,
-          },
-          usage: response.llmTrace.usage,
-          durationMs: response.llmTrace.durationMs,
-        },
-      );
-
-      const finalText = await faithfulnessGate(
-        response.text,
-        ctx,
-        runContext,
-        phaseResult,
-        response,
       );
 
       runContext.discard();

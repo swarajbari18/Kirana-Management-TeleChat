@@ -22,16 +22,16 @@ export const MAX_BC_TOOL_PLAN_VERIFY_RETRIES = 2;
 export const MAX_GO_GEMINI_ROUNDS = 4;
 
 /**
- * Response regeneration attempts after faithfulness matcher finds unsupported claims.
- * Does NOT cap claim extraction schema retries (see MAX_CLAIM_EXTRACTION_RETRIES).
+ * Response regeneration attempts after binding verification fails.
+ * Does NOT cap grounded-response schema retries (see MAX_GROUNDED_RESPONSE_SCHEMA_RETRIES).
  */
 export const MAX_FAITHFULNESS_REGEN = 2;
 
 /**
- * Schema correction retries when faithfulness claim extractor returns invalid JSON.
- * Does NOT cap faithfulness response regeneration (see MAX_FAITHFULNESS_REGEN).
+ * Schema correction retries when grounded response JSON is invalid.
+ * Does NOT cap faithfulness binding regen (see MAX_FAITHFULNESS_REGEN).
  */
-export const MAX_CLAIM_EXTRACTION_RETRIES = 2;
+export const MAX_GROUNDED_RESPONSE_SCHEMA_RETRIES = 2;
 
 /** User-facing terminal error when orchestration fails unexpectedly. */
 export const GENERIC_ORCHESTRATION_ERROR =

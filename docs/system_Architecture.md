@@ -4553,19 +4553,8 @@ The model **publishes** evidence bindings at write time (like research citations
 
 **Do not** chain a second language-model pass to extract or reinterpret claims from generated prose. Production experience showed that NL → LLM extractor → matcher **regresses** accuracy (false rejections of correct responses, product–value alias errors, added latency) instead of improving it. Faithfulness is not improved by stacking more probabilistic steps on natural language; it is improved by **one** generation step that cites tool-sourced facts, plus **deterministic** verification.
 
-Implementation specification: [component_4.1_fixes plan](.cursor/plans/component_4.1_fixes_c4706af8.plan.md). Knowledge base for tool authors: `docs/verified-facts-and-grounded-response.md` (created in C4.1).
-
 ---
 
-### Verification strategy
-
-1. **Verified Fact Registry** — harness builds stable `factId` records from `CapabilityResult.verifiedFacts` (per tool, per citeable field; for inventory, per SKU and attribute such as quantity).
-2. **Grounded generation** — one LLM call outputs `lines[]` with `display` and `bindings` citing catalog `factId`s only.
-3. **Schema validation** — deterministic code validates JSON shape (harness retry if malformed).
-4. **Binding verification** — for each binding: `factId` exists, `field` matches, `asShown` matches registry value (with type-aware normalization, e.g. boolean Yes/true). Product–quantity relationships are verified via **SKU-specific factId**, not isolated numbers.
-5. **Regeneration** — binding failures trigger grounded response regeneration with line-level diagnostics (capped); business execution is never repeated.
-
-`denied` outcomes (`{ status, reason }`) use **outcome bindings**, not verified facts.
 
 **Explicitly rejected design:** hybrid faithfulness via post-hoc **claim extraction** from NL (response LLM → extractor LLM → matcher). That pattern is not part of this architecture.
 
@@ -6595,9 +6584,6 @@ Optional `shop_profile_history` records post-confirmation applied writes — dis
 
 Conversation turns persist only final assistant output to the owner.
 
-### Component status
-
-Component 3 validated the harness in memory with manual production testing. Component 4 implements full `agent_trace_events` persistence, dependency-aware execution, and profile change history. **Faithfulness (Layer 3)** is specified as the **Grounded Response** bounded component (C4.1) — not NL claim extraction. Specification: [agent-traceability-and-agent-state.md](agent-traceability-and-agent-state.md). Goal documents: [component_4_harness plan](.cursor/plans/component_4_harness_dbafc641.plan.md), [component_4.1_fixes plan](.cursor/plans/component_4.1_fixes_c4706af8.plan.md).
 
 ---
 

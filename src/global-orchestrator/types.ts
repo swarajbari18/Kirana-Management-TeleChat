@@ -33,6 +33,7 @@ export interface CapabilityPlanStep {
 }
 
 export interface StructuredCapabilityPlan {
+  businessIntent: string;
   objectives: CapabilityPlanStep[];
 }
 

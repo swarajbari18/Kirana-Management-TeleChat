@@ -34,7 +34,6 @@ const baseCtx = {
 function mockRunContext() {
   return {
     appendTrace: vi.fn(async () => "evt-1"),
-    accumulateVerifiedFacts: vi.fn(),
     storeBcInvocation: vi.fn(),
   };
 }
@@ -62,6 +61,7 @@ describe("executePhase dependency scheduler", () => {
     });
 
     const plan: StructuredCapabilityPlan = {
+      businessIntent: "Fetch profile and read shop",
       objectives: [
         {
           objectiveId: "o1",
@@ -110,6 +110,7 @@ describe("executePhase dependency scheduler", () => {
     });
 
     const plan: StructuredCapabilityPlan = {
+      businessIntent: "Fetch profile and read shop",
       objectives: [
         {
           objectiveId: "o1",

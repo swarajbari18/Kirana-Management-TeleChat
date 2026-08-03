@@ -1,6 +1,6 @@
 # Agent traceability & agent state
 
-**Component 4 status:** `agent_trace_events` and `shop_profile_history` are written at runtime. Every harness transition (plan, verify, execute, decide, response, faithfulness) appends an L2 row with monotonic `seq`. MSP tool stages nest under `CAPABILITY_INVOKED` via `parent_event_id`. Reconstruct runs with [`sql/agent-trace.sql`](../sql/agent-trace.sql).
+**Component 4.1 status:** Faithfulness uses **grounded response + binding verifier** (no NL claim extractor). See [verified-facts-and-grounded-response.md](verified-facts-and-grounded-response.md).
 
 **This document** defines **agent state** (what it is, why it exists, how it differs from conversation state), records what can be reconstructed from SQLite today, and specifies what **Component 4** must add so every run in [`queries.csv`](../queries.csv) is fully auditable without `wrangler tail`.
 
@@ -306,7 +306,7 @@ Persisted in `agent_trace_events` at runtime:
 
 ```json
 {
-  "step": "go_plan | go_decision | go_response | bc_plan | go_faithfulness_extract",
+  "step": "go_plan | go_decision | go_grounded_response | bc_plan",
   "model": "gemini-3.6-flash",
   "invocation": { "systemInstruction": "...", "contents": [...] },
   "output": { "content": "...", "reasoning": "...", "parsed": {} },

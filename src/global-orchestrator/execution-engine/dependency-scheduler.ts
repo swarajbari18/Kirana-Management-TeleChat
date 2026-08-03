@@ -112,7 +112,6 @@ export async function executePhase(
 
       const status = resultStatusFromCapability(result);
       phaseResult.objectives[step.objectiveId] = { status, result };
-      runContext.accumulateVerifiedFacts(result);
       runContext.storeBcInvocation(step.objectiveId, null, result);
 
       await runContext.appendTrace(

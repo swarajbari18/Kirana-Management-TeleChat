@@ -24,10 +24,10 @@ ORDER BY created_at DESC
 LIMIT 5;
 
 
--- =============================================================================
--- STEP 1 — Harness trace timeline (main query)
--- Copy from WITH through the semicolon below. Run as one query.
--- =============================================================================
+-- C4.1: Respond path uses GroundedResponse JSON in RESPONSE_GENERATED (step go_grounded_response).
+--       FAITHFULNESS_VERIFIED shows { lineCount, bindingCount } — no FAITHFULNESS_EXTRACT.
+--       CAPABILITY_PLAN.parsed includes businessIntent.
+-- See: docs/verified-facts-and-grounded-response.md
 
 WITH params AS (
   SELECT 261541057 AS update_id

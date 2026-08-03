@@ -18,6 +18,34 @@ export function verifyCapabilityPlan(
     return { valid: false, reason: diagnostics[0], diagnostics };
   }
 
+  const intent = plan.businessIntent?.trim() ?? "";
+  if (intent.length < 3) {
+    diagnostics.push("businessIntent is required and must be at least 3 characters");
+    return { valid: false, reason: diagnostics[0], diagnostics };
+  }
+
+  if (plan.objectives.length > 1) {
+    for (const step of plan.objectives) {
+      if (intent === step.objectiveDescription.trim()) {
+        diagnostics.push(
+          "businessIntent must not equal a single objectiveDescription when multiple objectives exist",
+        );
+        return { valid: false, reason: diagnostics[0], diagnostics };
+      }
+    }
+  } else if (
+    plan.objectives.length === 1 &&
+    intent === plan.objectives[0]!.objectiveDescription.trim()
+  ) {
+    console.warn(
+      JSON.stringify({
+        layer: "runtime",
+        action: "business_intent_smoke",
+        message: "businessIntent equals sole objectiveDescription",
+      }),
+    );
+  }
+
   const objectiveIds = new Set<string>();
 
   for (const step of plan.objectives) {
