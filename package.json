@@ -11,11 +11,13 @@
     "typecheck": "tsc --noEmit",
     "eval": "npx --yes tsx scripts/eval/run-evaluation-queries.ts",
     "eval:5.0": "npx --yes tsx scripts/eval/run-queries-5.0.ts",
-    "eval:5.1": "npm run eval"
+    "eval:5.1": "npm run eval",
+    "eval:5.5": "npx --yes tsx scripts/eval/run-queries-5.5.ts"
   },
   "dependencies": {
     "@grammyjs/types": "^3.17.0",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "pptxgenjs": "^4.0.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260801.1",

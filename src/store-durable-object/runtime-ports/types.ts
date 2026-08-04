@@ -1,5 +1,6 @@
 import type { InlineKeyboardYesNo } from "../../worker-telegram-adapter/callback-parser.js";
 import type { ExecutionResult } from "../../worker-telegram-adapter/contracts/index.js";
+import type { ArtifactServices } from "../../artifact/types.js";
 
 export interface RuntimePorts {
   deliverConfirmation(input: {
@@ -19,4 +20,6 @@ export interface RuntimePorts {
     confirmationId: string,
     timeoutMs: number,
   ): Promise<"approved" | "denied" | "expired">;
+
+  artifacts: ArtifactServices;
 }

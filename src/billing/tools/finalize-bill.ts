@@ -17,7 +17,8 @@ import {
   checkLineAvailability,
   formatAvailabilityRefusal,
 } from "../availability.js";
-import { renderInvoiceHtml } from "../artifact/render-invoice-html.js";
+import { buildInvoicePdf } from "../../artifact/build-invoice-pdf.js";
+import { ArtifactRenderError } from "../../artifact/errors.js";
 import { formatFinalizeConfirmationTable } from "../confirmation/format-finalize-confirmation-table.js";
 import { loadDraftProjection } from "../draft-projection.js";
 import { ClarificationError } from "../errors.js";
@@ -135,19 +136,30 @@ export async function finalizeBill(
     const generateArtifact =
       params.generateArtifact !== false && profile.artifactsEnabled !== false;
 
-    let invoiceHtml: string | undefined;
+    let invoiceAttached = false;
+    let artifactRefusal: string | undefined;
+
     if (generateArtifact && bill) {
-      invoiceHtml = renderInvoiceHtml({
-        shop: profile,
-        bill,
-        lines: billLines,
-      });
-      const bytes = new TextEncoder().encode(invoiceHtml);
-      attachments.push({
-        filename: `invoice-${toolCtx.billId.slice(0, 8)}.html`,
-        mimeType: "text/html",
-        bytes,
-      });
+      try {
+        const pdfBytes = await buildInvoicePdf(runtimePorts.artifacts, {
+          shop: profile,
+          bill,
+          lines: billLines,
+        });
+        attachments.push({
+          filename: `invoice-${toolCtx.billId.slice(0, 8)}.pdf`,
+          mimeType: "application/pdf",
+          bytes: pdfBytes,
+        });
+        invoiceAttached = true;
+      } catch (error) {
+        if (error instanceof ArtifactRenderError) {
+          artifactRefusal =
+            "Bill finalized, but the invoice PDF could not be generated.";
+        } else {
+          throw error;
+        }
+      }
     }
 
     const verifiedFacts: Record<string, unknown> = {
@@ -169,7 +181,7 @@ export async function finalizeBill(
       })),
     };
 
-    if (invoiceHtml) {
+    if (invoiceAttached) {
       verifiedFacts.invoice_attached = true;
     }
 
@@ -181,6 +193,7 @@ export async function finalizeBill(
         attachmentCount: attachments.length,
       },
       attachments,
+      refusalMessage: artifactRefusal,
     };
   };
 

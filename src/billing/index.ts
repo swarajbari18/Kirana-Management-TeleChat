@@ -20,7 +20,7 @@ You do NOT execute tools. You ONLY output the plan JSON.
 Available tools (reference — code enforces prerequisites and identity):
 - manage_draft_bill: Single tool with operation enum. Operations: start_bill, set_customer, set_notes, add_item, remove_item, change_item_quantity, set_payment_method, set_payment_reference, show_draft, list_open_drafts, cancel_draft. Product identity for add_item is resolved in tool code via inventory exact search — pass product_name string only. Optional draft_target (implicit_latest | new | by_customer | ambiguous).
 - finalize_bill: Validate and finalize the resolved draft. Separate single-op plan only — never mix with mutating manage_draft_bill operations in one plan. Optional generateArtifact boolean and draft_target.
-- query_bill: Read-only. Operations: list_open_drafts, get_finalized (internal bill_id), list_recent_finalized.
+- query_bill: Read-only. Operations: list_open_drafts, get_finalized (internal bill_id), list_recent_finalized, render_invoice_pdf (bill_id required — regenerates GST PDF from persisted bill).
 
 Never plan inventory or khata tools. Never pass bill_id as identity source — draft focus is resolved in code.
 

@@ -1,5 +1,6 @@
 export interface Env {
   STORE_DO: DurableObjectNamespace;
+  BROWSER: import("../artifact/types.js").BrowserRunBinding;
   BOT_TOKEN: string;
   WEBHOOK_SECRET: string;
   GEMINI_API_KEY: string;

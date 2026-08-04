@@ -1,0 +1,6 @@
+id,component,area,scenario,query,precondition,expected_capability,expected_trace_outcome,requires_confirmation,requires_clarification,requires_replan,assertions,notes
+C55-001,component_5.5,artifacts,walkthrough_w1,"Finalize bill with PDF artifact",open draft + inventory seed,multi-capability,W1 — PDF attachment on finalize; invoice_attached fact,no,,,application/pdf attachment,After C52-style bill flow
+C55-002,component_5.5,artifacts,walkthrough_w2,"Finalize bill",artifactsEnabled false on shop,billing,W2 — no PDF attachment; bill still finalized,no,,,invoice_attached absent,Shop profile preference gate
+C55-003,component_5.5,artifacts,walkthrough_w3,"send me that bill as a PDF",recent finalized bill,billing,W3 — query_bill render_invoice_pdf + PDF,no,,,on-demand PDF regeneration,
+C55-004,component_5.5,artifacts,walkthrough_w4,"make this week's sales analysis deck",after billing seed,analytics,W4 — PPTX attachment + daily summary in chat,no,,,ANALYTICS_GENERATED + ARTIFACT_GENERATED,
+C55-005,component_5.5,artifacts,walkthrough_w5,"today's sales?",artifactsEnabled false + bills exist,analytics,W5 — PPTX still attached (analytics ignores artifactsEnabled),no,,,application/vnd...pptx,

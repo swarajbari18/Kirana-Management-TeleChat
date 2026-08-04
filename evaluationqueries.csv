@@ -32,3 +32,8 @@ C54-002,component_5.4,analytics,walkthrough_w2,"close the day",after billing see
 C54-003,component_5.4,analytics,walkthrough_w3,"make this week's sales analysis deck",after billing seed,analytics,W3 — full HTML deck substitute; not PPTX,no,,,weekly + current_week in attachment,
 C54-004,component_5.4,analytics,walkthrough_w4,"today's sales?",empty shop no bills,analytics,W4 — completed refusalMessage; no attachment,no,,,no invented sales,
 C54-005,component_5.4,analytics,walkthrough_w5,"how much GST collected today?",after billing seed,analytics,W5 — daily GST in chat; full HTML attachment,no,,,artifactsEnabled override for analytics,
+C55-001,component_5.5,artifacts,walkthrough_w1,"Finalize bill with PDF artifact",open draft + inventory seed,multi-capability,W1 — PDF attachment on finalize; invoice_attached fact,no,,,application/pdf attachment,
+C55-002,component_5.5,artifacts,walkthrough_w2,"Finalize bill",artifactsEnabled false on shop,billing,W2 — no PDF attachment; bill still finalized,no,,,invoice_attached absent,
+C55-003,component_5.5,artifacts,walkthrough_w3,"send me that bill as a PDF",recent finalized bill,billing,W3 — query_bill render_invoice_pdf + PDF,no,,,on-demand PDF regeneration,
+C55-004,component_5.5,artifacts,walkthrough_w4,"make this week's sales analysis deck",after billing seed,analytics,W4 — PPTX attachment + daily summary in chat,no,,,ARTIFACT_GENERATED trace,
+C55-005,component_5.5,artifacts,walkthrough_w5,"today's sales?",artifactsEnabled false + bills exist,analytics,W5 — PPTX still attached (analytics ignores artifactsEnabled),no,,,application/vnd...pptx,

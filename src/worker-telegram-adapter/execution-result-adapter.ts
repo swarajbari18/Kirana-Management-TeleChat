@@ -1,5 +1,6 @@
 import type { ExecutionResult } from "./contracts/index.js";
 import { GENERIC_ERROR_MESSAGE } from "./constants.js";
+import { artifactDeliveredPayload } from "../artifact/trace-payload.js";
 import * as telegramClient from "./telegram-client.js";
 
 export interface DeliveryTarget {
@@ -57,6 +58,16 @@ export async function deliver(
         delivery.chatId,
         attachment,
         { replyToMessageId: delivery.replyToMessageId },
+      );
+      console.log(
+        JSON.stringify({
+          layer: "runtime",
+          action: "ARTIFACT_DELIVERED",
+          ...artifactDeliveredPayload({
+            filename: attachment.filename,
+            mimeType: attachment.mimeType,
+          }),
+        }),
       );
     }
   }

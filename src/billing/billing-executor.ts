@@ -33,6 +33,7 @@ import {
 } from "./tools/manage-draft-bill.js";
 import { queryBill } from "./tools/query-bill.js";
 import type { ManageDraftOperation } from "./types.js";
+import { artifactGeneratedPayload } from "../artifact/trace-payload.js";
 import type {
   ToolPlanVerificationResult,
 } from "./execution-engine/plan-verification.js";
@@ -128,10 +129,26 @@ async function executeBillingTool(
   };
 
   if (step.toolName === "query_bill") {
-    const result = await queryBill(db, step.parameters);
+    const result = await queryBill(db, runtimePorts, step.parameters);
+    if (result.attachments?.[0] && runContext) {
+      const attachment = result.attachments[0];
+      await runContext.appendTrace(
+        "capability",
+        "billing",
+        "ARTIFACT_GENERATED",
+        artifactGeneratedPayload({
+          kind: "invoice_pdf",
+          filename: attachment.filename,
+          byteLength: attachment.bytes.byteLength,
+          mimeType: attachment.mimeType,
+        }),
+      );
+    }
     return {
       verifiedFacts: result.verifiedFacts,
       agentState: result.agentState,
+      attachments: result.attachments,
+      refusalMessage: result.refusalMessage,
     };
   }
 
@@ -187,6 +204,20 @@ async function executeBillingTool(
       updateId: toolCtxBase.updateId,
       correlationId: toolCtxBase.correlationId,
     });
+    if (result.attachments?.[0] && runContext) {
+      const attachment = result.attachments[0];
+      await runContext.appendTrace(
+        "capability",
+        "billing",
+        "ARTIFACT_GENERATED",
+        artifactGeneratedPayload({
+          kind: "invoice_pdf",
+          filename: attachment.filename,
+          byteLength: attachment.bytes.byteLength,
+          mimeType: attachment.mimeType,
+        }),
+      );
+    }
     return {
       verifiedFacts: result.verifiedFacts,
       agentState: result.agentState,

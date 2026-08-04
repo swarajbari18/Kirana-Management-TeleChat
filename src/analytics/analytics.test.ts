@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { generateAnalytics } from "./generate-analytics.js";
+import { generateAnalytics, ANALYSIS_PPTX_MIME } from "./generate-analytics.js";
 import { buildAnalysisSnapshot } from "./build-analysis-snapshot.js";
 import type { AnalysisSnapshot } from "./types.js";
 
@@ -107,7 +107,7 @@ describe("GEN-02", () => {
     const { result } = await generateAnalytics({} as never);
     expect(result.status).toBe("completed");
     if (result.status === "completed") {
-      expect(result.attachments?.[0]?.mimeType).toBe("text/html");
+      expect(result.attachments?.[0]?.mimeType).toBe(ANALYSIS_PPTX_MIME);
       expect(result.verifiedFacts.today_total_sales_paise).toBe(12000);
       expect(result.verifiedFacts.analysis_attached).toBe(true);
     }

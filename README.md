@@ -96,7 +96,7 @@ Component 5.2 replaces the billing unavailable stub with three tools: `manage_dr
 - **Event-sourced drafts** — append-only `billing_draft_events`; draft focus = last-edited open draft (Policy A).
 - **Bill-only finalize** — billing writes `billing_bills` + lines only; stock and khata are separate GO objectives (5.3).
 - **Oversell guard** — finalize reads `on_hand − active_reservations`; refusal via `refusalMessage`.
-- **Invoice artifact** — HTML attachment on `ExecutionResult.attachments` when `artifactsEnabled` (shop profile, default true).
+- **Invoice artifact** — PDF attachment on `ExecutionResult.attachments` when `artifactsEnabled` (shop profile, default true). See Component 5.5 for Browser Run pipeline.
 - **Dummy bill** — `start_bill` with shop customer + `set_notes` for loose-pack write-offs (C52-007).
 
 ### Eval
@@ -137,11 +137,35 @@ Component 5.4 replaces the analytics unavailable stub with a **direct determinis
 - **Empty shop** — `completed` + `refusalMessage`; no attachment, no invented figures.
 - **`AnalysisSnapshot`** — shared type for 5.5 PPTX template (do not duplicate SQL in 5.5).
 
+> **Superseded by 5.5:** Telegram delivery is **PPTX** (not HTML). `render-analysis-html.ts` remains for dev/unit tests only.
+
 ### Eval
 
 1. `wrangler deploy`
 2. `npm run eval` (C54 rows in `evaluationqueries.csv`)
 3. Human Pass on W1–W5 minimum (daily sales, close the day, weekly deck phrasing, empty shop, narrow GST question)
+
+## Component 5.5 — Artifact generator (PDF + PPTX)
+
+Component 5.5 adds production artifacts via two canonical renderers in `src/artifact/`:
+
+| Deliverable | Engine | Telegram MIME |
+|-------------|--------|----------------|
+| GST invoice | Cloudflare **Browser Run** `quickAction("pdf")` from internal HTML template | `application/pdf` |
+| Sales analysis deck | **PptxGenJS** from `AnalysisSnapshot` (parameter-only) | `application/vnd...presentationml.presentation` |
+
+- **Never HTML to Telegram** — invoice HTML is compile-only input for PDF; no `text/html` billing/analytics attachments.
+- **Billing gate** — `generateArtifact !== false` and `shop_profile.artifactsEnabled !== false`.
+- **Analytics gate** — PPTX always when bills exist; ignores `artifactsEnabled`.
+- **On-demand PDF** — `query_bill` operation `render_invoice_pdf` regenerates from SQLite.
+- **Traces** — `ARTIFACT_GENERATED` (DO, metadata only) and `ARTIFACT_DELIVERED` (Worker after `sendDocument`).
+- **Wrangler** — `[browser]` binding + `compatibility_date >= 2026-03-24`; Browser Run billed separately (browser-hours).
+
+### Eval
+
+1. `wrangler deploy` (enable Browser Run on account)
+2. `npm run eval:5.5` (or full `npm run eval` for C55 rows)
+3. Human Pass: open PDF (GST table legible); open PPTX (charts render); `invoice_attached` / `analysis_attached` facts in traces
 
 ## Component 5.0 evaluation
 
@@ -166,7 +190,7 @@ Walkthrough references: W1 (C50-001 inventory update), W2 (C50-002 stock check),
 ### Known gaps (5.0)
 
 - Meta questions ("what can you do?") — future `system_understanding` system capability (README note only)
-- PDF delivery — Worker-only spike (`PDF-01`); full artifact pipeline deferred to 5.5
+- PDF delivery — production pipeline in 5.5 (`Browser Run` + `PDF-01` transport test)
 - Eval ≠ manual Telegram smoke testing; Telegram delivery during eval is an acceptable side effect
 
 ## Operations

@@ -32,6 +32,11 @@ const BILL_FIELDS: Array<{
       `Bill total for ${ctx.customer_name ?? "customer"}: ${v} paise`,
   },
   {
+    field: "invoice_attached",
+    valueType: "boolean",
+    label: () => "Invoice PDF attached",
+  },
+  {
     field: "subtotal_paise",
     valueType: "number",
     label: (v) => `Bill subtotal (paise): ${v}`,

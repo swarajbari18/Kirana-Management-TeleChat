@@ -1,10 +1,13 @@
 import type { StoreDatabase } from "../store-durable-object/persistence/db.js";
 import { countFinalizedBills } from "../store-durable-object/persistence/repositories/analytics-repository.js";
 import type { CapabilityResult } from "../capability-registry/types.js";
+import { renderAnalysisPptx } from "../artifact/render-analysis-pptx.js";
 import { buildAnalysisSnapshot } from "./build-analysis-snapshot.js";
-import { renderAnalysisHtml } from "./artifact/render-analysis-html.js";
 import { formatIstFilenameTimestamp } from "./period-boundaries.js";
 import type { AnalysisSnapshot } from "./types.js";
+
+export const ANALYSIS_PPTX_MIME =
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 function mapDailyVerifiedFacts(snapshot: AnalysisSnapshot): Record<string, unknown> {
   const facts: Record<string, unknown> = {
@@ -45,8 +48,8 @@ export async function generateAnalytics(
   }
 
   const snapshot = await buildAnalysisSnapshot(db);
-  const html = renderAnalysisHtml(snapshot);
-  const filename = `shop-analysis-${formatIstFilenameTimestamp(new Date(snapshot.generatedAtIso))}.html`;
+  const pptxBytes = await renderAnalysisPptx(snapshot);
+  const filename = `shop-analysis-${formatIstFilenameTimestamp(new Date(snapshot.generatedAtIso))}.pptx`;
 
   return {
     result: {
@@ -55,8 +58,8 @@ export async function generateAnalytics(
       attachments: [
         {
           filename,
-          mimeType: "text/html",
-          bytes: new TextEncoder().encode(html),
+          mimeType: ANALYSIS_PPTX_MIME,
+          bytes: pptxBytes,
         },
       ],
     },
@@ -88,6 +91,7 @@ export function analyticsTracePayload(
       yearly: snapshot.yearly.billCount,
     },
     attachmentFilename,
+    attachmentMime: ANALYSIS_PPTX_MIME,
     emptyShop,
   };
 }

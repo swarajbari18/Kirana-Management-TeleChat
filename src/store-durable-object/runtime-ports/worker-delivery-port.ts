@@ -4,6 +4,7 @@ import {
   insertPendingConfirmation,
   resolvePendingConfirmation,
 } from "../persistence/repositories/pending-confirmation-repository.js";
+import { createArtifactServices } from "../../artifact/create-artifact-services.js";
 import {
   ConfirmationRegistry,
   waitForConfirmation as waitForConfirmationOutcome,
@@ -51,6 +52,8 @@ export function createWorkerDeliveryPort(
         timeoutMs,
       );
     },
+
+    artifacts: createArtifactServices(ctx.env),
   };
 }
 

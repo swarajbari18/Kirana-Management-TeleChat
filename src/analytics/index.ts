@@ -6,6 +6,7 @@ import type { CapabilityResult } from "../capability-registry/types.js";
 import {
   analyticsTracePayload,
   generateAnalytics,
+  ANALYSIS_PPTX_MIME,
 } from "./generate-analytics.js";
 
 export const ANALYTICS_TOOL_SURFACE = ["generate_analytics"];
@@ -38,9 +39,29 @@ export async function executeAnalytics(
             generatedAtIso: new Date().toISOString(),
             emptyShop: true,
             attachmentFilename: null,
+            attachmentMime: null,
           },
       parentEventId,
     );
+    if (
+      result.status === "completed" &&
+      result.attachments?.[0] &&
+      snapshot
+    ) {
+      const attachment = result.attachments[0];
+      await runContext.appendTrace(
+        "capability",
+        "analytics",
+        "ARTIFACT_GENERATED",
+        {
+          kind: "analysis_pptx",
+          filename: attachment.filename,
+          byteLength: attachment.bytes.byteLength,
+          mimeType: ANALYSIS_PPTX_MIME,
+        },
+        parentEventId,
+      );
+    }
   }
 
   return result;
