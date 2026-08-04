@@ -1,4 +1,4 @@
-import type { StructuredToolPlan, ToolPlanStep } from "../types.js";
+import type { StructuredToolPlan, ToolPlanStep } from "../../capability-registry/types.js";
 import { isValidGstin } from "../validation/gstin.js";
 
 export interface ToolPlanVerificationResult {

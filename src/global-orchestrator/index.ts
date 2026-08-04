@@ -16,7 +16,7 @@ import { executePhase } from "./execution-engine/index.js";
 import { verifyCapabilityPlan } from "./execution-engine/plan-verification.js";
 import { verifyGroundedResponse } from "./faithfulness/index.js";
 import { planCapabilities } from "./planning-mode.js";
-import { generateClarifyResponse } from "./response-generation.js";
+import { generateAskUserResponse } from "./response-generation.js";
 import type { OrchestrationContext } from "./types.js";
 
 function terminalSafeOutcome(text: string): ExecutionResult {
@@ -145,7 +145,7 @@ export async function orchestrate(
         runContext,
       );
 
-      runContext.buildRegistryFromPhaseResult(plan, phaseResult);
+      await runContext.buildRegistryFromPhaseResult(plan, phaseResult);
 
       const { decision, llmTrace: decisionTrace } = await decideNextAction(
         ctx,
@@ -178,12 +178,12 @@ export async function orchestrate(
         continue;
       }
 
-      if (decision.action === "clarify") {
-        const response = await generateClarifyResponse(
+      if (decision.action === "ask_user") {
+        const response = await generateAskUserResponse(
           ctx,
           runContext,
           phaseResult,
-          decision.clarificationFocus,
+          decision,
         );
 
         await runContext.traceLlmInvocation(
@@ -191,7 +191,7 @@ export async function orchestrate(
           "global_orchestrator",
           "RESPONSE_GENERATED",
           {
-            step: "go_response_clarify",
+            step: "go_response_ask_user",
             model: GEMINI_MODEL,
             invocation: response.llmTrace.invocation,
             output: {
@@ -211,6 +211,7 @@ export async function orchestrate(
         ctx,
         runContext,
         phaseResult,
+        decision,
       );
 
       runContext.discard();

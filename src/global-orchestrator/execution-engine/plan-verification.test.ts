@@ -7,7 +7,7 @@ const validPlan = {
     {
       objectiveId: "o1",
       objectiveDescription: "Read shop profile",
-      capabilityId: "my_shop_profile",
+      capabilityId: "user_profile",
       dependencies: [],
     },
   ],
@@ -21,7 +21,7 @@ describe("verifyCapabilityPlan", () => {
         {
           objectiveId: "o1",
           objectiveDescription: "test",
-          capabilityId: "unknown_capability",
+          capabilityId: "stock_management",
           dependencies: [],
         },
       ],
@@ -30,7 +30,7 @@ describe("verifyCapabilityPlan", () => {
     expect(result.reason).toContain("Unknown capability");
   });
 
-  it("accepts my_shop_profile capability with businessIntent", () => {
+  it("accepts user_profile capability with businessIntent", () => {
     const result = verifyCapabilityPlan(validPlan);
     expect(result.valid).toBe(true);
   });
@@ -51,13 +51,13 @@ describe("verifyCapabilityPlan", () => {
         {
           objectiveId: "o1",
           objectiveDescription: "Read profile",
-          capabilityId: "my_shop_profile",
+          capabilityId: "user_profile",
           dependencies: [],
         },
         {
           objectiveId: "o2",
           objectiveDescription: "Update instructions",
-          capabilityId: "my_shop_profile",
+          capabilityId: "user_profile",
           dependencies: [],
         },
       ],

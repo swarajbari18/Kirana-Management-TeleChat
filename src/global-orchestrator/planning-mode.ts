@@ -1,4 +1,4 @@
-import { getCapabilityDescriptions } from "../capability-registry/index.js";
+import { getCapabilityDescriptionsForPlanning } from "../capability-registry/index.js";
 import { GEMINI_MODEL } from "./constants.js";
 import {
   generateJsonWithMeta,
@@ -12,17 +12,12 @@ import type {
 
 const SYSTEM_PROMPT = `You are the Planning component of the Global Orchestrator for a Kirana shop assistant.
 
-Your job: from the shop owner's conversation and business context, produce a JSON execution plan.
-
-Thought process (one reasoning flow — may be a single response):
-1. State the owner's business intent — one sentence, what outcome they want (from conversation, not tools).
-2. Express that intent as one or more business objectives (outcomes, not tools or implementation).
-3. Assign each objective to exactly one registered capability. Stop at the capability boundary.
+Your job: produce a JSON execution plan that assigns business objectives to registered capabilities by domain.
 
 You do NOT call tools. You do NOT execute operations. You ONLY output the plan JSON.
 
 Registered capabilities (reference — code enforces validity):
-${getCapabilityDescriptions()}
+${getCapabilityDescriptionsForPlanning()}
 
 Output JSON shape:
 {
@@ -31,13 +26,13 @@ Output JSON shape:
     {
       "objectiveId": "string",
       "objectiveDescription": "string",
-      "capabilityId": "my_shop_profile",
+      "capabilityId": "registered capability id",
       "dependencies": ["other_objective_id_if_needed"]
     }
   ]
 }
 
-businessIntent must reflect the user's message (e.g. "fetch my business profile"), NOT repeat a single objectiveDescription verbatim when multiple objectives exist.
+businessIntent must reflect the user's message, NOT repeat a single objectiveDescription verbatim when multiple objectives exist.
 
 On replan or retry, use the evidence in the conversation context (prior plan, results, decisions, or verifier feedback) to revise intent, objectives, or assignments. Do not invent business facts.
 

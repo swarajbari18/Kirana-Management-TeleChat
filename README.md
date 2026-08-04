@@ -71,6 +71,32 @@ Unit tests cover pure deterministic logic (parsers, normalizer, handler). Coloca
 | Generic error | `We're facing some problems right now. Please try again later.` |
 | Stub greeting | `hi MF it's good to see you` |
 
+## Component 5.0 evaluation
+
+The 5.0 eval spine uses the **deployed Worker webhook → Store Durable Object** path (same as production). Traces in `agent_trace_events` are the evidence — not HTTP 200, not manual Telegram chat reading.
+
+### Prerequisites
+
+1. `wrangler deploy` with `GEMINI_API_KEY` set on the Worker
+2. Copy `.dev.vars.example` → `.dev.vars` with `WORKER_WEBHOOK_URL`, `WEBHOOK_SECRET`
+3. Run: `npm run eval:5.0`
+
+The script posts each row in `queries-5.0.csv`, waits async DO processing (default 30s per query; override with `EVAL_WAIT_MS`), and prints `update_id` values for trace export.
+
+### Trace audit
+
+1. Export traces from the DO SQL console (same workflow as `explain your capabilities.csv`)
+2. Run `sql/agent-trace.sql` per printed `update_id`
+3. Score against rubric dimensions: routing, status honesty (`not_supported` / `unavailable` / `clarification_needed`), Decision action (`replan` / `ask_user` / `respond`), response grounding, no wrong writes
+
+Walkthrough references: W1 (C50-001 inventory update), W2 (C50-002 stock check), W4 (C50-004 GST ask_user), W5 (C50-005 capabilities — no invented system capabilities).
+
+### Known gaps (5.0)
+
+- Meta questions ("what can you do?") — future `system_understanding` system capability (README note only)
+- PDF delivery — Worker-only spike (`PDF-01`); full artifact pipeline deferred to 5.5
+- Eval ≠ manual Telegram smoke testing; Telegram delivery during eval is an acceptable side effect
+
 ## Operations
 
 See **[running.md](running.md)** for deploy, secrets, webhook registration, production validation, and `wrangler tail`.

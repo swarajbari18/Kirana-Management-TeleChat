@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { GEMINI_MODEL } from "../global-orchestrator/constants.js";
 import { verifyBindings } from "../global-orchestrator/faithfulness/binding-verifier.js";
 import { validateGroundedResponse } from "../global-orchestrator/grounded-response/schema.js";
-import { buildMspFactRecords } from "../global-orchestrator/verified-facts/msp-fact-registry.js";
+import { buildUserProfileFactRecords } from "../global-orchestrator/verified-facts/user-profile-fact-registry.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const skipReason = "Set GEMINI_API_KEY in .dev.vars";
@@ -14,9 +14,9 @@ describe("grounded response production integration", () => {
   it.skipIf(!GEMINI_API_KEY)(
     `G4 ${GEMINI_MODEL} returns valid GroundedResponse (${skipReason})`,
     async () => {
-      const records = buildMspFactRecords(
+      const records = buildUserProfileFactRecords(
         "fetch_shop_profile",
-        "my_shop_profile",
+        "user_profile",
         "read_shop_profile",
         {
           shopName: "Bantu Kirana",

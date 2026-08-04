@@ -5,14 +5,14 @@ import type {
   VerifiedFactRecord,
 } from "./types.js";
 import {
-  buildMspFactRecords,
-  inferMspToolName,
-} from "./msp-fact-registry.js";
+  inferUserProfileToolName,
+} from "./user-profile-fact-registry.js";
+import { resolveFaithfulnessBuilder } from "../../capability-registry/index.js";
 
-export function buildRegistryFromPhaseResult(
+export async function buildRegistryFromPhaseResult(
   plan: StructuredCapabilityPlan,
   phaseResult: ExecutionPhaseResult,
-): Map<string, VerifiedFactRecord> {
+): Promise<Map<string, VerifiedFactRecord>> {
   const registry = new Map<string, VerifiedFactRecord>();
 
   const objectiveById = new Map(
@@ -30,18 +30,24 @@ export function buildRegistryFromPhaseResult(
 
     const step = objectiveById.get(objectiveId);
     const capabilityId = step?.capabilityId ?? "unknown";
-    const toolName = inferMspToolName(result.verifiedFacts);
+    const builder = await resolveFaithfulnessBuilder(capabilityId);
+    if (!builder) {
+      continue;
+    }
 
-    if (capabilityId === "my_shop_profile") {
-      const records = buildMspFactRecords(
-        objectiveId,
-        capabilityId,
-        toolName,
-        result.verifiedFacts,
-      );
-      for (const record of records) {
-        registry.set(record.factId, record);
-      }
+    const toolName =
+      capabilityId === "user_profile"
+        ? inferUserProfileToolName(result.verifiedFacts)
+        : "unknown";
+
+    const records = builder(
+      objectiveId,
+      capabilityId,
+      toolName,
+      result.verifiedFacts,
+    );
+    for (const record of records) {
+      registry.set(record.factId, record);
     }
   }
 

@@ -1,0 +1,6 @@
+id,component,facet,test_type,query,prerequisite,target_layer,expected_outcome,should_fail,failure_point,follow_up,verify_in_db,notes
+C50-001,component_5.0,routing,walkthrough_w1,"Can you update my inventory?",any,global_orchestrator,W1 — replan + unavailable + respond; no ask_user,no,,,no shop_profile writes,Trace B corrected
+C50-002,component_5.0,routing,walkthrough_w2,"How much sugar is left?",any,global_orchestrator,W2 — unavailable + respond; no profile writes,no,,,no shop_profile changes,ONB-027 scenario
+C50-003,component_5.0,user_profile,regression,"What is my shop name?",shop_name set,user_profile,Grounded respond with shop name fact,no,,,answer cites user_profile fact,Regression read path
+C50-004,component_5.0,tax_registration,walkthrough_w4,"Yes I am GST registered",no GSTIN,user_profile,W4 — ask_user for GSTIN,no,,,shop_profile.gstin unchanged,ONB-016 style
+C50-005,component_5.0,meta,walkthrough_w5,"What are your current capabilities?",any,global_orchestrator,W5 — no invented system capabilities in response,no,,,,Trace A improved; full fix deferred

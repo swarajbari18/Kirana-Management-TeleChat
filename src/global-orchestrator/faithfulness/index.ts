@@ -5,7 +5,7 @@ import {
   MAX_GROUNDED_RESPONSE_SCHEMA_RETRIES,
 } from "../constants.js";
 import type { RunContext } from "../../store-durable-object/agent-state/run-context.js";
-import type { OrchestrationContext } from "../types.js";
+import type { OrchestrationContext, DecisionResult } from "../types.js";
 import type { ExecutionPhaseResult } from "../execution-engine/types.js";
 import {
   generateGroundedResponseWithSchemaRetry,
@@ -36,6 +36,7 @@ export async function verifyGroundedResponse(
   ctx: OrchestrationContext,
   runContext: RunContext,
   phaseResult: ExecutionPhaseResult,
+  decision?: DecisionResult,
 ): Promise<string> {
   let bindingDiagnostics: string | undefined;
 
@@ -48,12 +49,14 @@ export async function verifyGroundedResponse(
             phaseResult,
             MAX_GROUNDED_RESPONSE_SCHEMA_RETRIES,
             bindingDiagnostics,
+            decision,
           )
         : await regenerateGroundedResponse(
             ctx,
             runContext,
             phaseResult,
             bindingDiagnostics!,
+            decision,
           );
 
     const schemaCheck = validateGroundedResponse(response);

@@ -9,7 +9,7 @@ describe("validateGroundedResponse", () => {
           display: "Shop name: Bantu Kirana",
           bindings: [
             {
-              factId: "my_shop_profile_o1_read_shop_profile_shopName",
+              factId: "user_profile_o1_read_shop_profile_shopName",
               field: "shopName",
               asShown: "Bantu Kirana",
             },

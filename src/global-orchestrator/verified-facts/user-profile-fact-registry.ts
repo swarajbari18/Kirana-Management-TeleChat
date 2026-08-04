@@ -1,6 +1,6 @@
 import type { VerifiedFactRecord, VerifiedFactValueType } from "./types.js";
 
-const MSP_READ_FIELDS: Array<{
+const USER_PROFILE_READ_FIELDS: Array<{
   field: string;
   valueType: VerifiedFactValueType;
   label: (value: string) => string;
@@ -54,7 +54,7 @@ function buildFactId(
   return `${capabilityId}_${objectiveId}_${toolName}_${field}`;
 }
 
-export function inferMspToolName(
+export function inferUserProfileToolName(
   verifiedFacts: Record<string, unknown>,
 ): string {
   const keys = new Set(Object.keys(verifiedFacts));
@@ -79,7 +79,7 @@ export function inferMspToolName(
   return "read_shop_profile";
 }
 
-export function buildMspFactRecords(
+export function buildUserProfileFactRecords(
   objectiveId: string,
   capabilityId: string,
   toolName: string,
@@ -87,7 +87,7 @@ export function buildMspFactRecords(
 ): VerifiedFactRecord[] {
   const records: VerifiedFactRecord[] = [];
 
-  for (const spec of MSP_READ_FIELDS) {
+  for (const spec of USER_PROFILE_READ_FIELDS) {
     if (!(spec.field in verifiedFacts)) {
       continue;
     }

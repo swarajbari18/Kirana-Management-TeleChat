@@ -1,4 +1,4 @@
-import type { CapabilityResult } from "../../my-shop-profile/types.js";
+import type { CapabilityResult } from "../../capability-registry/types.js";
 import type { ObjectiveStatus } from "../../store-durable-object/agent-state/run-context.js";
 
 export interface ObjectivePhaseEntry {

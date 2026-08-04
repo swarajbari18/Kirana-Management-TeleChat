@@ -39,7 +39,7 @@ When designing a new tool or capability:
 
 `{capabilityId}_{objectiveId}_{toolName}_{field}`
 
-Example: `my_shop_profile_fetch_shop_profile_read_shop_profile_gstin`
+Example: `user_profile_fetch_shop_profile_read_shop_profile_gstin`
 
 ## GroundedResponse schema
 
@@ -50,7 +50,7 @@ Example: `my_shop_profile_fetch_shop_profile_read_shop_profile_gstin`
       "display": "GSTIN: 27AAPFU0939F1ZV",
       "bindings": [
         {
-          "factId": "my_shop_profile_fetch_shop_profile_read_shop_profile_gstin",
+          "factId": "user_profile_fetch_shop_profile_read_shop_profile_gstin",
           "field": "gstin",
           "asShown": "27AAPFU0939F1ZV"
         }

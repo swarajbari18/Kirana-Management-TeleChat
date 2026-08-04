@@ -1,4 +1,5 @@
 import type { StructuredCapabilityPlan } from "../types.js";
+import { getRegisteredCapabilityIds } from "../../capability-registry/index.js";
 
 export interface PlanVerificationResult {
   valid: boolean;
@@ -6,12 +7,11 @@ export interface PlanVerificationResult {
   diagnostics?: string[];
 }
 
-const KNOWN_CAPABILITIES = new Set(["my_shop_profile"]);
-
 export function verifyCapabilityPlan(
   plan: StructuredCapabilityPlan,
 ): PlanVerificationResult {
   const diagnostics: string[] = [];
+  const knownCapabilities = new Set(getRegisteredCapabilityIds());
 
   if (!plan.objectives || plan.objectives.length === 0) {
     diagnostics.push("Plan has no objectives");
@@ -60,7 +60,7 @@ export function verifyCapabilityPlan(
     }
     objectiveIds.add(step.objectiveId);
 
-    if (!KNOWN_CAPABILITIES.has(step.capabilityId)) {
+    if (!knownCapabilities.has(step.capabilityId)) {
       diagnostics.push(`Unknown capability: ${step.capabilityId}`);
       return { valid: false, reason: diagnostics[0], diagnostics };
     }
@@ -76,7 +76,6 @@ export function verifyCapabilityPlan(
     }
   }
 
-  // Cycle detection via topological sort
   const sorted: string[] = [];
   const remaining = [...plan.objectives];
   const completed = new Set<string>();

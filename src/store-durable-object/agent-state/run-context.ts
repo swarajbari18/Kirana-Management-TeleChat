@@ -1,4 +1,4 @@
-import type { CapabilityResult } from "../../my-shop-profile/types.js";
+import type { CapabilityResult } from "../../capability-registry/types.js";
 import type { StoreDatabase } from "../persistence/db.js";
 import { insertTraceEvent } from "../persistence/repositories/agent-trace-repository.js";
 import type {
@@ -19,6 +19,7 @@ import {
   buildRegistryFromPhaseResult,
   factsForDecision,
 } from "../../global-orchestrator/verified-facts/registry-builder.js";
+import { getCapabilityContextForDecision } from "../../capability-registry/index.js";
 
 export type TraceStage =
   | "CONTEXT_ASSEMBLED"
@@ -54,6 +55,8 @@ export type ObjectiveStatus =
   | "clarification_needed"
   | "denied"
   | "error"
+  | "not_supported"
+  | "unavailable"
   | "skipped_blocked";
 
 export interface LlmInvocationTrace {
@@ -142,11 +145,14 @@ export class RunContext {
     this.contextAssembled = true;
   }
 
-  buildRegistryFromPhaseResult(
+  async buildRegistryFromPhaseResult(
     plan: StructuredCapabilityPlan,
     phaseResult: ExecutionPhaseResult,
-  ): void {
-    this.verifiedFactRegistry = buildRegistryFromPhaseResult(plan, phaseResult);
+  ): Promise<void> {
+    this.verifiedFactRegistry = await buildRegistryFromPhaseResult(
+      plan,
+      phaseResult,
+    );
     this.outcomeRegistry = buildOutcomeCatalogFromPhaseResult(phaseResult);
   }
 
@@ -228,10 +234,11 @@ export class RunContext {
 
   decisionContextSlice(phaseResult: ExecutionPhaseResult): string {
     const parts: string[] = [
+      `Capability registry:\n${getCapabilityContextForDecision()}`,
       `Business intent: ${this.resolveBusinessIntent()}`,
       `Execution plan:\n${JSON.stringify(this.currentPlan, null, 2)}`,
       `Plan version: ${this.planVersion}`,
-      `Objective results:\n${JSON.stringify(phaseResult, null, 2)}`,
+      `Objective results (full CapabilityResult per objective):\n${JSON.stringify(phaseResult, null, 2)}`,
       `Verified facts:\n${JSON.stringify(factsForDecision(this.verifiedFactRegistry))}`,
     ];
 
@@ -254,33 +261,66 @@ export class RunContext {
     return parts.join("\n\n");
   }
 
-  clarifyContextSlice(phaseResult: ExecutionPhaseResult): string {
+  askUserContextSlice(
+    phaseResult: ExecutionPhaseResult,
+    decision?: DecisionResult,
+  ): string {
     const clarifications = Object.entries(phaseResult.objectives)
       .filter(([, v]) => v.result?.status === "clarification_needed")
       .map(([, v]) => v.result);
 
-    const completed = Object.entries(phaseResult.objectives)
-      .filter(([, v]) => v.result?.status === "completed")
-      .map(([, v]) => v.result);
-
-    return [
+    const parts = [
       `Clarification needs:\n${JSON.stringify(clarifications)}`,
-      `Completed acknowledgments:\n${JSON.stringify(completed)}`,
       `User message: ${this.ctx.inbound.text}`,
-    ].join("\n\n");
+    ];
+
+    if (decision) {
+      parts.unshift(`Decision:\n${JSON.stringify(decision, null, 2)}`);
+    }
+
+    return parts.join("\n\n");
   }
 
-  respondContextSlice(phaseResult: ExecutionPhaseResult): string {
+  /** @deprecated Use askUserContextSlice */
+  clarifyContextSlice(phaseResult: ExecutionPhaseResult): string {
+    return this.askUserContextSlice(phaseResult);
+  }
+
+  respondContextSlice(
+    phaseResult: ExecutionPhaseResult,
+    decision?: DecisionResult,
+  ): string {
     const denied = Object.entries(phaseResult.objectives)
       .filter(([, v]) => v.result?.status === "denied")
       .map(([, v]) => v.result);
 
-    return [
+    const executionSummary = Object.entries(phaseResult.objectives).map(
+      ([objectiveId, entry]) => {
+        const step = this.currentPlan?.objectives.find(
+          (o) => o.objectiveId === objectiveId,
+        );
+        return {
+          objectiveId,
+          capabilityId: step?.capabilityId,
+          status: entry.status,
+          result: entry.result,
+        };
+      },
+    );
+
+    const parts = [
+      decision
+        ? `Decision:\n${JSON.stringify(decision, null, 2)}`
+        : "",
+      `Business intent: ${this.resolveBusinessIntent()}`,
+      `Execution summary:\n${JSON.stringify(executionSummary, null, 2)}`,
       `Verified facts:\n${JSON.stringify(factsForDecision(this.verifiedFactRegistry))}`,
       `Denied outcomes:\n${JSON.stringify(denied)}`,
       `User message: ${this.ctx.inbound.text}`,
       `Owner instructions: ${JSON.stringify(this.ctx.ownerProfile.instructions)}`,
-    ].join("\n\n");
+    ];
+
+    return parts.filter(Boolean).join("\n\n");
   }
 
   recordReplanVersion(

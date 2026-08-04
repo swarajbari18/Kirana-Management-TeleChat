@@ -25,9 +25,8 @@ LIMIT 5;
 
 
 -- C4.1: Respond path uses GroundedResponse JSON in RESPONSE_GENERATED (step go_grounded_response).
---       FAITHFULNESS_VERIFIED shows { lineCount, bindingCount } — no FAITHFULNESS_EXTRACT.
---       CAPABILITY_PLAN.parsed includes businessIntent.
--- See: docs/verified-facts-and-grounded-response.md
+-- C5.0: CAPABILITY_STEP_COMPLETED may show not_supported / unavailable in resultSummary.
+--       Decision action is ask_user (not clarify). Component trace name: user_profile.
 
 WITH params AS (
   SELECT 261541057 AS update_id

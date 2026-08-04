@@ -1,4 +1,4 @@
-import type { CapabilityResult } from "../my-shop-profile/types.js";
+import type { CapabilityResult } from "../capability-registry/types.js";
 import { GEMINI_MODEL } from "./constants.js";
 import { generateJsonWithMeta } from "./gemini-client.js";
 import type { RunContext } from "../store-durable-object/agent-state/run-context.js";
@@ -10,32 +10,57 @@ const SYSTEM_PROMPT = `You are the Decision component of the Global Orchestrator
 
 Your job: judge whether the owner's business intent has been fulfilled given the evidence from ONE completed execution interaction.
 
-You receive:
-- The business intent (what the owner wants)
-- The execution plan artifact (objectives already assigned to capabilities — do NOT re-plan objectives here)
-- The outcome of every objective after the full execution phase (completed, clarification needed, denied, skipped)
-- Verified business facts from completed objectives
-
-Ask: Does this evidence satisfy the business intent?
+You receive runtime truth: business intent, capability registry summary, execution plan, per-objective CapabilityResult (including not_supported, unavailable, clarification_needed with distinct semantics), and verified facts.
 
 Choose exactly one action:
-- replan: intent not met; strategy or objectives must change (explain rationale — Planning will use it)
-- clarify: required information missing; owner must answer in chat (explain what is missing)
-- respond: intent met, or only acknowledgment needed (e.g. user denied a write)
+- replan: evidence shows the plan or capability assignment must change (e.g. not_supported, wrong capability)
+- ask_user: a tool needs missing business information from the owner (clarification_needed from a tool)
+- respond: terminal — explain outcome to owner (success, denial, unavailable, exhausted replan)
 
 Output JSON:
 {
-  "action": "replan" | "clarify" | "respond",
-  "rationale": "why this action — especially for replan: what gap remains vs business intent",
-  "clarificationFocus": "optional; if clarify: what to ask the owner"
+  "action": "replan" | "ask_user" | "respond",
+  "rationale": "why this action",
+  "askUserFocus": "optional; if ask_user: what to ask the owner"
 }
 
-You do NOT execute capabilities. You do NOT invent business facts. There is no "continue" — execution already completed for this plan.
+You do NOT execute capabilities. You do NOT invent business facts. Reason only from provided execution evidence.
 Output valid JSON only.`;
 
 export interface DecideNextActionResult {
   decision: DecisionResult;
   llmTrace: import("./gemini-client.js").GeminiInvocationResult<DecisionResult>;
+}
+
+export function normalizeDecision(
+  raw: DecisionResult | (Omit<DecisionResult, "action"> & { action: string }),
+): DecisionResult {
+  if (raw.action === "clarify") {
+    return {
+      action: "ask_user",
+      rationale: raw.rationale,
+      askUserFocus: raw.askUserFocus ?? raw.clarificationFocus,
+    };
+  }
+  if (raw.action === "ask_user" && !raw.askUserFocus && raw.clarificationFocus) {
+    return {
+      action: "ask_user",
+      rationale: raw.rationale,
+      askUserFocus: raw.clarificationFocus,
+      clarificationFocus: raw.clarificationFocus,
+    };
+  }
+  if (
+    raw.action === "replan" ||
+    raw.action === "ask_user" ||
+    raw.action === "respond"
+  ) {
+    return raw as DecisionResult;
+  }
+  return {
+    action: "respond",
+    rationale: raw.rationale ?? "unknown action",
+  };
 }
 
 export async function decideNextAction(
@@ -51,7 +76,7 @@ export async function decideNextAction(
     userPrompt,
   );
 
-  return { decision: llmTrace.result, llmTrace };
+  return { decision: normalizeDecision(llmTrace.result), llmTrace };
 }
 
 export function buildDecisionTracePayload(

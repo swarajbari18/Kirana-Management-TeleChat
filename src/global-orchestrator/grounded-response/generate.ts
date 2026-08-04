@@ -8,9 +8,12 @@ import {
 import type { RunContext } from "../../store-durable-object/agent-state/run-context.js";
 import type { OrchestrationContext } from "../types.js";
 import type { ExecutionPhaseResult } from "../execution-engine/types.js";
+import type { DecisionResult } from "../types.js";
 import type { GroundedResponse } from "./types.js";
 
 const GROUNDED_RESPONSE_SYSTEM_PROMPT = `You are the Response component of the Global Orchestrator.
+
+Your job: produce natural language for the shop owner grounded in execution evidence and the Decision rationale.
 
 Output valid JSON only:
 {
@@ -32,8 +35,9 @@ Rules:
 4. field must match the catalog entry's field.
 5. asShown must match how that value appears in display (e.g. "Yes" for booleans).
 6. Do not invent factIds. Do not cite product A's factId while stating product B's quantity.
-7. Prose-only lines (greetings) may have empty bindings only when they state no facts.
-8. For denied writes, use outcomeBindings instead of fact bindings.
+7. Do not state outcomes beyond execution evidence and Decision rationale. Do not invent system capabilities.
+8. Prose-only lines (greetings) may have empty bindings only when they state no facts.
+9. For denied writes, use outcomeBindings instead of fact bindings.
 
 Fact Catalog:
 {fact_catalog_json}
@@ -60,13 +64,10 @@ function buildUserPrompt(
   ctx: OrchestrationContext,
   runContext: RunContext,
   phaseResult: ExecutionPhaseResult,
+  decision?: DecisionResult,
   bindingDiagnostics?: string,
 ): string {
-  const parts = [
-    runContext.respondContextSlice(phaseResult),
-    `User message: ${ctx.inbound.text}`,
-    `Owner instructions: ${JSON.stringify(ctx.ownerProfile.instructions)}`,
-  ];
+  const parts = [runContext.respondContextSlice(phaseResult, decision)];
   if (bindingDiagnostics) {
     parts.push(`Previous response had binding errors:\n${bindingDiagnostics}`);
   }
@@ -82,6 +83,7 @@ export async function generateGroundedResponse(
   ctx: OrchestrationContext,
   runContext: RunContext,
   phaseResult: ExecutionPhaseResult,
+  decision?: DecisionResult,
   bindingDiagnostics?: string,
 ): Promise<GenerateGroundedResponseResult> {
   const systemPrompt = buildSystemPrompt(runContext);
@@ -89,6 +91,7 @@ export async function generateGroundedResponse(
     ctx,
     runContext,
     phaseResult,
+    decision,
     bindingDiagnostics,
   );
 
@@ -106,11 +109,13 @@ export async function regenerateGroundedResponse(
   runContext: RunContext,
   phaseResult: ExecutionPhaseResult,
   bindingDiagnostics: string,
+  decision?: DecisionResult,
 ): Promise<GenerateGroundedResponseResult> {
   return generateGroundedResponse(
     ctx,
     runContext,
     phaseResult,
+    decision,
     bindingDiagnostics,
   );
 }
@@ -121,6 +126,7 @@ export async function generateGroundedResponseWithSchemaRetry(
   phaseResult: ExecutionPhaseResult,
   maxRetries: number,
   bindingDiagnostics?: string,
+  decision?: DecisionResult,
 ): Promise<GenerateGroundedResponseResult> {
   const systemPrompt = buildSystemPrompt(runContext);
   let contents: GeminiContent[] = [
@@ -128,7 +134,13 @@ export async function generateGroundedResponseWithSchemaRetry(
       role: "user",
       parts: [
         {
-          text: buildUserPrompt(ctx, runContext, phaseResult, bindingDiagnostics),
+          text: buildUserPrompt(
+            ctx,
+            runContext,
+            phaseResult,
+            decision,
+            bindingDiagnostics,
+          ),
         },
       ],
     },

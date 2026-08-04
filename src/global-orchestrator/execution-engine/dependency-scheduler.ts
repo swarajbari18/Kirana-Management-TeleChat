@@ -1,4 +1,4 @@
-import type { CapabilityResult } from "../../my-shop-profile/types.js";
+import type { CapabilityResult } from "../../capability-registry/types.js";
 import type { RunContext } from "../../store-durable-object/agent-state/run-context.js";
 import type { RuntimePorts } from "../../store-durable-object/runtime-ports/types.js";
 import type { StoreDatabase } from "../../store-durable-object/persistence/db.js";
@@ -16,6 +16,8 @@ const BLOCKING_STATUSES = new Set([
   "clarification_needed",
   "denied",
   "error",
+  "not_supported",
+  "unavailable",
 ]);
 
 function isDependencyBlocked(
@@ -39,7 +41,7 @@ function isDependencyBlocked(
 
 function resultStatusFromCapability(
   result: CapabilityResult,
-): "completed" | "clarification_needed" | "denied" | "error" {
+): import("../../store-durable-object/agent-state/run-context.js").ObjectiveStatus {
   switch (result.status) {
     case "completed":
       return "completed";
@@ -47,6 +49,10 @@ function resultStatusFromCapability(
       return "clarification_needed";
     case "denied":
       return "denied";
+    case "not_supported":
+      return "not_supported";
+    case "unavailable":
+      return "unavailable";
     default:
       return "error";
   }
@@ -124,7 +130,7 @@ export async function executePhase(
           resultSummary:
             result.status === "completed"
               ? Object.keys(result.verifiedFacts)
-              : result.status,
+              : result,
         },
         parentEventId,
       );

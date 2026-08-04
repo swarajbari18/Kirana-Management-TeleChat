@@ -172,7 +172,7 @@ Each row is one transition:
 | `seq` | Monotonic order within run (v1, v2, v3…) |
 | `parent_event_id` | Nullable — links MSP events under GO `CAPABILITY_INVOKED` |
 | `layer` | `go` \| `capability` \| `verify` \| `transport` |
-| `component` | e.g. `global_orchestrator`, `my_shop_profile` |
+| `component` | e.g. `global_orchestrator`, `user_profile` |
 | `stage` | e.g. `CAPABILITY_PLAN`, `PLAN_VERIFIED`, `TOOL_EXECUTED` |
 | `snapshot_json` | Structured payload at this point (plan, results, diagnostics) |
 | `created_at` | Timestamp |
@@ -186,12 +186,12 @@ seq  layer       component            stage                    snapshot (summary
  2   go          global_orchestrator  CAPABILITY_PLAN          { objectives: [...] }
  3   verify      global_orchestrator  PLAN_VERIFIED            { valid: true }
  4   go          global_orchestrator  CAPABILITY_INVOKED       { objectiveId, capabilityId }
- 5   capability  my_shop_profile      TOOL_PLAN                parent=4, { operations: [...] }
- 6   verify      my_shop_profile      TOOL_PLAN_VERIFIED       parent=4, { valid: true }
- 7   capability  my_shop_profile      TOOL_EXECUTED            parent=4, tool, inputs/outputs
- 8   capability  my_shop_profile      CONFIRMATION_REQUESTED   parent=4, display_payload
- 9   capability  my_shop_profile      CONFIRMATION_RESOLVED    parent=4, approved
-10   go          global_orchestrator  DECISION                 { action: respond, plan, results }
+ 5   capability  user_profile         TOOL_PLAN                parent=4, { operations: [...] }
+ 6   verify      user_profile         TOOL_PLAN_VERIFIED       parent=4, { valid: true }
+ 7   capability  user_profile         TOOL_EXECUTED            parent=4, tool, inputs/outputs
+ 8   capability  user_profile         CONFIRMATION_REQUESTED   parent=4, display_payload
+ 9   capability  user_profile         CONFIRMATION_RESOLVED    parent=4, approved
+10   go          global_orchestrator  DECISION                 { action: ask_user|replan|respond, plan, results }
 11   go          global_orchestrator  RESPONSE_GENERATED       { text }
 ```
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { CapabilityResult } from "../../my-shop-profile/types.js";
+import type { CapabilityResult } from "../../capability-registry/types.js";
 import type { StructuredCapabilityPlan } from "../types.js";
 import type { OrchestrationContext } from "../types.js";
 
@@ -66,19 +66,19 @@ describe("executePhase dependency scheduler", () => {
         {
           objectiveId: "o1",
           objectiveDescription: "needs info",
-          capabilityId: "my_shop_profile",
+          capabilityId: "user_profile",
           dependencies: [],
         },
         {
           objectiveId: "o2",
           objectiveDescription: "read profile",
-          capabilityId: "my_shop_profile",
+          capabilityId: "user_profile",
           dependencies: [],
         },
         {
           objectiveId: "o3",
           objectiveDescription: "blocked by o1",
-          capabilityId: "my_shop_profile",
+          capabilityId: "user_profile",
           dependencies: ["o1"],
         },
       ],
@@ -115,13 +115,13 @@ describe("executePhase dependency scheduler", () => {
         {
           objectiveId: "o1",
           objectiveDescription: "update",
-          capabilityId: "my_shop_profile",
+          capabilityId: "user_profile",
           dependencies: [],
         },
         {
           objectiveId: "o2",
           objectiveDescription: "depends on o1",
-          capabilityId: "my_shop_profile",
+          capabilityId: "user_profile",
           dependencies: ["o1"],
         },
       ],
@@ -136,6 +136,88 @@ describe("executePhase dependency scheduler", () => {
     );
 
     expect(result.objectives.o1?.status).toBe("denied");
+    expect(result.objectives.o2?.status).toBe("skipped_blocked");
+    expect(mockedInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("STAT-02: blocks dependent when dependency is not_supported", async () => {
+    mockedInvoke.mockImplementation(async (_id, objective) => {
+      if (objective.objectiveId === "o1") {
+        return {
+          status: "not_supported",
+          reason: "wrong capability",
+        } satisfies CapabilityResult;
+      }
+      return {
+        status: "completed",
+        verifiedFacts: {},
+      } satisfies CapabilityResult;
+    });
+
+    const plan: StructuredCapabilityPlan = {
+      businessIntent: "Update inventory",
+      objectives: [
+        {
+          objectiveId: "o1",
+          objectiveDescription: "wrong domain",
+          capabilityId: "user_profile",
+          dependencies: [],
+        },
+        {
+          objectiveId: "o2",
+          objectiveDescription: "depends on o1",
+          capabilityId: "user_profile",
+          dependencies: ["o1"],
+        },
+      ],
+    };
+
+    const result = await executePhase(
+      plan,
+      baseCtx,
+      {} as never,
+      {} as never,
+      mockRunContext() as never,
+    );
+
+    expect(result.objectives.o1?.status).toBe("not_supported");
+    expect(result.objectives.o2?.status).toBe("skipped_blocked");
+  });
+
+  it("STAT-02: blocks dependent when dependency is unavailable", async () => {
+    mockedInvoke.mockImplementation(async () => ({
+      status: "unavailable",
+      capabilityId: "inventory",
+      reason: "not_implemented",
+    } satisfies CapabilityResult));
+
+    const plan: StructuredCapabilityPlan = {
+      businessIntent: "Check stock",
+      objectives: [
+        {
+          objectiveId: "o1",
+          objectiveDescription: "check sugar",
+          capabilityId: "inventory",
+          dependencies: [],
+        },
+        {
+          objectiveId: "o2",
+          objectiveDescription: "depends on o1",
+          capabilityId: "user_profile",
+          dependencies: ["o1"],
+        },
+      ],
+    };
+
+    const result = await executePhase(
+      plan,
+      baseCtx,
+      {} as never,
+      {} as never,
+      mockRunContext() as never,
+    );
+
+    expect(result.objectives.o1?.status).toBe("unavailable");
     expect(result.objectives.o2?.status).toBe("skipped_blocked");
     expect(mockedInvoke).toHaveBeenCalledTimes(1);
   });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildMspFactRecords } from "./msp-fact-registry.js";
+import { buildUserProfileFactRecords } from "./user-profile-fact-registry.js";
 
-describe("buildMspFactRecords", () => {
+describe("buildUserProfileFactRecords", () => {
   const verifiedFacts = {
     shopName: "Bantu Kirana",
     ownerName: "Swaraj Bari",
@@ -11,9 +11,9 @@ describe("buildMspFactRecords", () => {
   };
 
   it("emits 5 citeable facts for read_shop_profile", () => {
-    const records = buildMspFactRecords(
+    const records = buildUserProfileFactRecords(
       "fetch_shop_profile",
-      "my_shop_profile",
+      "user_profile",
       "read_shop_profile",
       verifiedFacts,
     );
@@ -23,24 +23,24 @@ describe("buildMspFactRecords", () => {
     );
   });
 
-  it("assigns stable factId pattern", () => {
-    const records = buildMspFactRecords(
+  it("assigns stable factId pattern with user_profile prefix", () => {
+    const records = buildUserProfileFactRecords(
       "fetch_shop_profile",
-      "my_shop_profile",
+      "user_profile",
       "read_shop_profile",
       verifiedFacts,
     );
     const shopName = records.find((r) => r.field === "shopName");
     expect(shopName?.factId).toBe(
-      "my_shop_profile_fetch_shop_profile_read_shop_profile_shopName",
+      "user_profile_fetch_shop_profile_read_shop_profile_shopName",
     );
     expect(shopName?.catalogLabel).toContain("Bantu Kirana");
   });
 
   it("sets boolean valueType for gstRegistered", () => {
-    const records = buildMspFactRecords(
+    const records = buildUserProfileFactRecords(
       "fetch_shop_profile",
-      "my_shop_profile",
+      "user_profile",
       "read_shop_profile",
       verifiedFacts,
     );
