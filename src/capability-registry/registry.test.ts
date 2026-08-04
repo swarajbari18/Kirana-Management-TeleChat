@@ -1,10 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   getCapabilityContextForDecision,
   getCapabilityDescriptionsForPlanning,
   getRegisteredCapabilityIds,
   invokeCapability,
 } from "./index.js";
+
+vi.mock(
+  "../store-durable-object/persistence/repositories/analytics-repository.js",
+  () => ({
+    countFinalizedBills: vi.fn(async () => 0),
+  }),
+);
 
 describe("capability registry REG-01", () => {
   it("exports all 5 capability IDs", () => {
