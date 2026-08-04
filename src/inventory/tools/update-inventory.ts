@@ -67,7 +67,7 @@ export async function updateInventory(
       verifiedFacts: { sku, productName: match.productName },
       agentState: { sku, refused: true },
       refusalMessage:
-        "Stock cannot be reduced via update_inventory. To reduce inventory, create a bill (billing will handle stock decrease).",
+        "Stock cannot be reduced via update_inventory. To reduce inventory for a sale, finalize a bill and use commit_bill_sale.",
     };
   }
 

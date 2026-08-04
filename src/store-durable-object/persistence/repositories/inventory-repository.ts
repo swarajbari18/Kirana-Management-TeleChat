@@ -17,7 +17,7 @@ export type Unit =
   | "dozen"
   | "piece";
 export type GstRate = 0 | 5 | 12 | 18;
-export type MovementType = "receive" | "reserve" | "commit" | "release";
+export type MovementType = "receive" | "reserve" | "commit" | "release" | "sale";
 export type ReservationStatus = "reserved" | "committed" | "released";
 
 export interface InventoryProductRow {
@@ -478,4 +478,129 @@ export async function countMovementsForSku(
     .where(eq(inventoryMovements.sku, sku))
     .get();
   return result?.count ?? 0;
+}
+
+export interface BillSaleLineCommit {
+  sku: string;
+  productName: string;
+  quantity: number;
+  beforeQty: number;
+  afterQty: number;
+}
+
+export async function findSaleMovementsForBill(
+  db: StoreDatabase,
+  billId: string,
+): Promise<typeof inventoryMovements.$inferSelect[]> {
+  return db
+    .select()
+    .from(inventoryMovements)
+    .where(
+      and(
+        eq(inventoryMovements.referenceType, "billing"),
+        eq(inventoryMovements.referenceId, billId),
+        eq(inventoryMovements.movementType, "sale"),
+      ),
+    );
+}
+
+export async function commitBillSale(
+  db: StoreDatabase,
+  input: {
+    billId: string;
+    lines: Array<{ sku: string; productName: string; quantity: number }>;
+    updateId: number;
+    correlationId: string;
+  },
+): Promise<{ alreadyCommitted: boolean; lines: BillSaleLineCommit[] }> {
+  const existing = await findSaleMovementsForBill(db, input.billId);
+  if (existing.length > 0) {
+    const lines: BillSaleLineCommit[] = [];
+    for (const movement of existing) {
+      lines.push({
+        sku: movement.sku,
+        productName: input.lines.find((l) => l.sku === movement.sku)?.productName ?? movement.sku,
+        quantity: Math.abs(movement.quantityDelta),
+        beforeQty: movement.balanceBefore,
+        afterQty: movement.balanceAfter,
+      });
+    }
+    return { alreadyCommitted: true, lines };
+  }
+
+  const committed: BillSaleLineCommit[] = [];
+  const now = new Date().toISOString();
+
+  await db.transaction(async (tx) => {
+    for (const line of input.lines) {
+      const product = await tx
+        .select()
+        .from(inventoryProducts)
+        .where(eq(inventoryProducts.sku, line.sku))
+        .get();
+      if (!product) {
+        throw new Error(`Product not found for commit_bill_sale: ${line.sku}`);
+      }
+
+      const reserved = await tx
+        .select()
+        .from(inventoryReservations)
+        .where(
+          and(
+            eq(inventoryReservations.sku, line.sku),
+            eq(inventoryReservations.status, "reserved"),
+          ),
+        );
+      const reservedQty = reserved.reduce((sum, row) => sum + row.quantity, 0);
+      const sellable = product.quantityOnHand - reservedQty;
+
+      if (line.quantity > sellable) {
+        throw new Error(
+          `insufficient_stock: ${line.productName}: requested ${line.quantity}, sellable ${sellable}`,
+        );
+      }
+
+      const balanceBefore = product.quantityOnHand;
+      const balanceAfter = balanceBefore - line.quantity;
+
+      await tx
+        .update(inventoryProducts)
+        .set({
+          quantityOnHand: balanceAfter,
+          updatedAt: now,
+        })
+        .where(eq(inventoryProducts.sku, line.sku));
+
+      await tx.insert(inventoryMovements).values({
+        id: crypto.randomUUID(),
+        sku: line.sku,
+        movementType: "sale",
+        quantityDelta: -line.quantity,
+        balanceBefore,
+        balanceAfter,
+        referenceType: "billing",
+        referenceId: input.billId,
+        updateId: input.updateId,
+        correlationId: input.correlationId,
+        createdAt: now,
+      });
+
+      committed.push({
+        sku: line.sku,
+        productName: line.productName,
+        quantity: line.quantity,
+        beforeQty: balanceBefore,
+        afterQty: balanceAfter,
+      });
+    }
+  });
+
+  for (const line of committed) {
+    const actual = await getProductBySku(db, line.sku);
+    if (!actual || actual.quantityOnHand !== line.afterQty) {
+      throw new Error(`Post-commit verify failed: ${line.sku} quantity mismatch`);
+    }
+  }
+
+  return { alreadyCommitted: false, lines: committed };
 }

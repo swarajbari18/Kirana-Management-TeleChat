@@ -416,7 +416,60 @@ Within one inventory BC invocation, the capability blueprint keeps an **L1 tool-
 
 `completed` + `refusalMessage` (e.g. stock reduction refused) flows to Decision/Response context but **never** enters the Fact Catalog.
 
-Movement types: `receive` (register/update increase), `reserve` / `commit` / `release` (allocate buffer). Billing (5.2) is the only path that permanently decreases `quantity_on_hand`.
+Movement types: `receive` (register/update increase), `reserve` / `commit` / `release` (allocate buffer), `sale` (`commit_bill_sale` only — post-finalize stock commit).
+
+---
+
+## Component 5.2 — Billing BC agent state
+
+Open drafts persist in SQLite (`billing_drafts` + append-only `billing_draft_events`) across `/new`. Draft focus uses **Policy A**: `implicit_latest` resolves to the open draft with max `last_event_at`. GO may set `draftTarget` on billing objectives; BC tool params override when present. `bill_id` is never owner-facing.
+
+Pre-loop (before harness tool iteration): draft focus resolver + event projection + state-machine guards run in code for `manage_draft_bill` and `finalize_bill`.
+
+`allocate_inventory` holds stock aside for a customer — independent of billing draft ids. Finalize checks `on_hand − active_reservations` per line; oversell returns `completed` + `refusalMessage`.
+
+Finalize confirmation (Yes/No) writes **bill rows only** (`billing_bills`, `billing_bill_lines`). Stock commit and khata credit are separate capabilities planned by GO after finalize (5.3). Invoice HTML attaches via `ExecutionResult.attachments` — bytes never in agent state or Fact Catalog.
+
+Cancel draft: confirmation → hard delete draft rows; `DRAFT_CANCELLED` trace.
+
+---
+
+## Component 5.3 — Sale collaboration & Khata BC
+
+### Sale collaboration invariant
+
+After `executePhase`, GO runs `checkSaleCollaborationInvariant` before Decision:
+
+1. Any billing objective with `verifiedFacts.finalized === true` requires an inventory objective depending on that billing objective (for `commit_bill_sale`).
+2. If `payment_method === "khata"`, a khata objective depending on billing is also required.
+
+On failure: trace `COLLABORATION_INVARIANT_FAILED`, preserve completed objectives, same-turn replan with invariant narrative (no deliver).
+
+### Cross-objective verified facts
+
+`dependency-scheduler` passes `priorObjectiveResults` (dependency objectiveId → `verifiedFacts`) into each capability invocation. Inventory `commit_bill_sale` and khata `record_credit_from_bill` read `bill_id` from billing facts and verify against SQLite.
+
+### Khata BC agent state
+
+Tools: `query_khata` (read-only, artifacts), `manage_khata_transaction` (all writes confirmed).
+
+Ledger entry types: `credit_sale` (from bill), `manual_credit`, `payment`. Customer search is exact-first with fuzzy clarify options — never silent auto-create.
+
+`TOOL_EXECUTED` for khata includes operation, customer id, entry type, balance before/after.
+
+### Analytics BC (Component 5.4)
+
+**Blueprint exception:** `capabilityId === "analytics"` invokes `executeAnalytics` directly — no inner Gemini tool plan, no `createCapabilityExecutor`.
+
+```text
+GO → invokeCapability("analytics") → generateAnalytics() → buildAnalysisSnapshot + renderAnalysisHtml
+```
+
+- Tool surface (Decision context only): `generate_analytics` — zero parameters; objective wording does not narrow scope.
+- Trace: `ANALYTICS_GENERATED` with period summary, `attachmentFilename`, `emptyShop` — never artifact bytes.
+- `verifiedFacts`: daily scalars only (`today_*`, `total_outstanding_udhar_paise`, `analysis_attached`).
+- HTML attachment on `CapabilityResult.attachments` → GO `collectAttachments` → `ExecutionResult.attachments`. Always when bills exist; ignores `artifactsEnabled`.
+- Empty shop: `completed` + `refusalMessage`; no attachment.
 
 ---
 

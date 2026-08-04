@@ -18,6 +18,7 @@ import { queryInventory } from "./tools/query-inventory.js";
 import { registerInventory } from "./tools/register-inventory.js";
 import { updateInventory } from "./tools/update-inventory.js";
 import { allocateInventory } from "./tools/allocate-inventory.js";
+import { commitBillSaleTool } from "./tools/commit-bill-sale.js";
 import { ClarificationError } from "./errors.js";
 
 const TOOL_SYSTEM_PROMPT = `You are the Planning component of the Inventory capability.
@@ -30,7 +31,8 @@ Available tools (reference — code enforces prerequisites and identity):
 - query_inventory: Read-only lookup by product_name, low_stock scan, or sku (sku only when already resolved). Returns exactMatchCount and exactMatches. Never modifies stock.
 - register_inventory: Create a NEW SKU only when exact search found zero matches. Fields: product_name, item_type, unit, quantity, cost_price, sell_price, hsn_code, gst_rate, optional reorder_level, optional aliases.
 - update_inventory: Increase quantity or update prices/reorder on an EXISTING SKU. Identity comes from prior query_inventory exact match — never pass sku as identity source.
-- allocate_inventory: Reserve/commit/release billing buffer. Fields: quantity, operation (reserve|commit|release), draft_bill_id, idempotency_key. Product identity from prior query_inventory exact match.
+- allocate_inventory: Hold stock aside for a customer (physical reserve — "keep packet #3 for Ramesh"). Fields: quantity, operation (reserve|commit|release), draft_bill_id, idempotency_key. This is NOT a billing draft and does NOT auto-reserve on bill line add. Product identity from prior query_inventory exact match.
+- commit_bill_sale: After a bill is finalized, permanently decrement stock for all bill lines. Requires bill_id (from billing dependency verified facts). Bill lines are loaded from SQLite — not invented by the planner.
 
 Identity for writes is resolved from exact query_inventory results in agent state — not from invented SKUs.
 
@@ -155,6 +157,20 @@ async function executeTool(
         refusalMessage: result.refusalMessage,
       };
     }
+    case "commit_bill_sale": {
+      const result = await commitBillSaleTool(
+        db,
+        runtimePorts,
+        step.parameters,
+        planContext,
+        toolCtx,
+      );
+      return {
+        verifiedFacts: result.verifiedFacts,
+        agentState: result.agentState,
+        refusalMessage: result.refusalMessage,
+      };
+    }
     default:
       throw new Error(`Unknown tool: ${step.toolName}`);
   }
@@ -194,4 +210,5 @@ export const INVENTORY_TOOL_SURFACE = [
   "register_inventory",
   "update_inventory",
   "allocate_inventory",
+  "commit_bill_sale",
 ];

@@ -77,8 +77,8 @@ Component 5.1 replaces the inventory unavailable stub with four tools: `query_in
 
 - **Exact-first search** — fuzzy/similar candidates appear only in clarification options, never as write identity.
 - **SKU for writes** comes from prior `query_inventory` exact match in L1 agent state (blueprint tool-result map), not from LLM-invented `sku`.
-- **Stock decreases** are refused on register/update (`completed` + `refusalMessage`); permanent decreases are Billing (5.2).
-- **Allocate** manages reservation buffer only; `quantity_on_hand` unchanged on reserve.
+- **Stock decreases** are refused on register/update (`completed` + `refusalMessage`); permanent sale decreases use `commit_bill_sale` after billing finalize (5.3).
+- **Allocate** holds stock aside for a customer (physical reserve) — not a billing draft and not auto on `add_item`. `quantity_on_hand` unchanged on reserve.
 - **Movement ledger** — every stock increase writes an `inventory_movements` row in the same transaction.
 
 ### Eval
@@ -88,6 +88,60 @@ Component 5.1 replaces the inventory unavailable stub with four tools: `query_in
 3. Export traces; audit with `sql/agent-trace.sql` per `update_id`
 
 C51 rows cover register (W1), update (W2), not-found read (W5), low stock (W6), refusal (W7), clarify (W3/W4), allocate (W10).
+
+## Component 5.2 — Billing evaluation
+
+Component 5.2 replaces the billing unavailable stub with three tools: `manage_draft_bill`, `finalize_bill`, `query_bill`.
+
+- **Event-sourced drafts** — append-only `billing_draft_events`; draft focus = last-edited open draft (Policy A).
+- **Bill-only finalize** — billing writes `billing_bills` + lines only; stock and khata are separate GO objectives (5.3).
+- **Oversell guard** — finalize reads `on_hand − active_reservations`; refusal via `refusalMessage`.
+- **Invoice artifact** — HTML attachment on `ExecutionResult.attachments` when `artifactsEnabled` (shop profile, default true).
+- **Dummy bill** — `start_bill` with shop customer + `set_notes` for loose-pack write-offs (C52-007).
+
+### Eval
+
+1. `wrangler deploy` (applies migration `0005_component_5_2_billing`)
+2. `npm run eval` (C52 rows in `evaluationqueries.csv`)
+3. Human Pass on W1 (multi-objective sale trace) and W2 (oversell with reservation)
+
+## Component 5.3 — Khata & sale orchestration
+
+Component 5.3 adds the Khata BC (`query_khata`, `manage_khata_transaction`), `commit_bill_sale` in Inventory, and GO **sale collaboration invariant** (same-turn replan when post-finalize objectives are missing).
+
+**Sale business operation** (typical cash sale):
+
+```text
+inventory (query) → billing (finalize) → inventory (commit_bill_sale)
+```
+
+Khata payment adds a fourth objective: `khata (record_credit_from_bill)` depending on billing.
+
+- **Read/write boundaries** — billing never writes inventory or khata; each BC owns its tables.
+- **Khata writes** always confirmed; never auto-create customer (confirmation instead).
+- **Cross-objective facts** — dependent objectives receive `priorObjectiveResults` from completed billing.
+
+### Eval
+
+1. `wrangler deploy` (applies migration `0006_component_5_3_khata_orchestration`)
+2. `npm run eval` (C53 + amended C52 rows)
+3. Human Pass on W1–W4 and W7 minimum (see plan walkthroughs)
+
+## Component 5.4 — Analytics
+
+Component 5.4 replaces the analytics unavailable stub with a **direct deterministic executor** (no Capability blueprint / no inner Gemini). Single tool: `generate_analytics` (zero parameters) — always produces the full six-period IST analysis.
+
+- **Read-only** — aggregates billing, inventory, and khata tables via `analytics-repository.ts`; never writes business data.
+- **Chat summary** — daily scalars in `verifiedFacts` for faithfulness (~5–6 lines).
+- **HTML artifact** — premium report with SVG charts; **always attached** when ≥1 finalized bill exists. **Ignores** `shop_profile.artifactsEnabled` (billing gate does not apply).
+- **Empty shop** — `completed` + `refusalMessage`; no attachment, no invented figures.
+- **`AnalysisSnapshot`** — shared type for 5.5 PPTX template (do not duplicate SQL in 5.5).
+
+### Eval
+
+1. `wrangler deploy`
+2. `npm run eval` (C54 rows in `evaluationqueries.csv`)
+3. Human Pass on W1–W5 minimum (daily sales, close the day, weekly deck phrasing, empty shop, narrow GST question)
 
 ## Component 5.0 evaluation
 

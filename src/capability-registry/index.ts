@@ -12,11 +12,25 @@ import {
   executeInventory,
   INVENTORY_TOOL_SURFACE,
 } from "../inventory/index.js";
-import { unavailableStub } from "./unavailable-stub.js";
+import {
+  executeBilling,
+  BILLING_TOOL_SURFACE,
+} from "../billing/index.js";
+import {
+  executeKhata,
+  KHATA_TOOL_SURFACE,
+} from "../khata/index.js";
+import {
+  executeAnalytics,
+  ANALYTICS_TOOL_SURFACE,
+} from "../analytics/index.js";
 
 export interface BusinessObjective {
   objectiveId: string;
   description: string;
+  draftTarget?: "implicit_latest" | "new" | "by_customer" | "ambiguous";
+  customerName?: string;
+  priorObjectiveResults?: Record<string, Record<string, unknown>>;
 }
 
 export type CapabilityHandler = (
@@ -51,11 +65,11 @@ const LOCKED_DESCRIPTIONS: Record<string, string> = {
   user_profile:
     "Use when the owner talks about their shop name, owner name, GSTIN, tax registration, or how the bot should reply (language, tone, instructions). Do not use for product stock, sales bills, customer credit, or business reports.",
   inventory:
-    "Use when the owner mentions receiving stock, adding a product/SKU, checking how much of something is left, or low stock. Do not use for creating bills, customer balances, shop GST setup, or sales summaries.",
+    "Use when the owner mentions receiving stock, adding a product/SKU, checking how much of something is left, low stock, holding stock aside for a customer (allocate/reserve), or committing stock after a finalized sale (commit_bill_sale). Does not update khata or create bills by itself.",
   billing:
-    "Use when the owner wants to make, edit, or finalize a bill/invoice for a sale — line items, totals, GST breakdown, payment type. Do not use for stock receipt without billing, credit ledger entries alone, or shop profile changes.",
+    "Use when the owner wants to make, edit, or finalize a bill/invoice for a sale — line items, totals, GST breakdown, payment type. Billing persists the bill only; it does not update stock or khata (those are separate post-finalize objectives).",
   khata:
-    "Use when the owner records credit (udhar), takes a payment, or asks a customer's outstanding balance. Do not use for inventory quantities, bill creation, or shop configuration.",
+    "Use when the owner records credit (udhar), takes a payment, asks a customer's outstanding balance, or records bill credit after a khata sale. Khata owns the credit ledger; billing does not write khata rows.",
   analytics:
     "Use when the owner asks for today's sales, closing the day, weekly analysis, top-selling items, or GST collected — read-only summaries. Do not use for any write operation (stock, bills, credit, profile).",
 };
@@ -104,6 +118,72 @@ async function ensureInventoryFaithfulnessBuilder(): Promise<FaithfulnessBuilder
   return inventoryFaithfulnessBuilder;
 }
 
+async function importBillingFaithfulnessBuilder(): Promise<FaithfulnessBuilder> {
+  const { buildBillingFactRecords } = await import(
+    "../global-orchestrator/verified-facts/billing-fact-registry.js"
+  );
+  return (objectiveId, capabilityId, toolName, verifiedFacts) =>
+    buildBillingFactRecords(
+      objectiveId,
+      capabilityId,
+      toolName,
+      verifiedFacts,
+    );
+}
+
+let billingFaithfulnessBuilder: FaithfulnessBuilder | undefined;
+
+async function ensureBillingFaithfulnessBuilder(): Promise<FaithfulnessBuilder> {
+  if (!billingFaithfulnessBuilder) {
+    billingFaithfulnessBuilder = await importBillingFaithfulnessBuilder();
+  }
+  return billingFaithfulnessBuilder;
+}
+
+async function importKhataFaithfulnessBuilder(): Promise<FaithfulnessBuilder> {
+  const { buildKhataFactRecords } = await import(
+    "../global-orchestrator/verified-facts/khata-fact-registry.js"
+  );
+  return (objectiveId, capabilityId, toolName, verifiedFacts) =>
+    buildKhataFactRecords(
+      objectiveId,
+      capabilityId,
+      toolName,
+      verifiedFacts,
+    );
+}
+
+let khataFaithfulnessBuilder: FaithfulnessBuilder | undefined;
+
+async function ensureKhataFaithfulnessBuilder(): Promise<FaithfulnessBuilder> {
+  if (!khataFaithfulnessBuilder) {
+    khataFaithfulnessBuilder = await importKhataFaithfulnessBuilder();
+  }
+  return khataFaithfulnessBuilder;
+}
+
+async function importAnalyticsFaithfulnessBuilder(): Promise<FaithfulnessBuilder> {
+  const { buildAnalyticsFactRecords } = await import(
+    "../global-orchestrator/verified-facts/analytics-fact-registry.js"
+  );
+  return (objectiveId, capabilityId, toolName, verifiedFacts) =>
+    buildAnalyticsFactRecords(
+      objectiveId,
+      capabilityId,
+      toolName,
+      verifiedFacts,
+    );
+}
+
+let analyticsFaithfulnessBuilder: FaithfulnessBuilder | undefined;
+
+async function ensureAnalyticsFaithfulnessBuilder(): Promise<FaithfulnessBuilder> {
+  if (!analyticsFaithfulnessBuilder) {
+    analyticsFaithfulnessBuilder = await importAnalyticsFaithfulnessBuilder();
+  }
+  return analyticsFaithfulnessBuilder;
+}
+
 const registry: Record<string, RegistryEntry> = {
   user_profile: {
     id: "user_profile",
@@ -125,25 +205,25 @@ const registry: Record<string, RegistryEntry> = {
     id: "billing",
     kind: "business",
     description: LOCKED_DESCRIPTIONS.billing,
-    handler: async (objective) => unavailableStub("billing", objective),
-    implemented: false,
-    toolSurface: [],
+    handler: executeBilling,
+    implemented: true,
+    toolSurface: BILLING_TOOL_SURFACE,
   },
   khata: {
     id: "khata",
     kind: "business",
     description: LOCKED_DESCRIPTIONS.khata,
-    handler: async (objective) => unavailableStub("khata", objective),
-    implemented: false,
-    toolSurface: [],
+    handler: executeKhata,
+    implemented: true,
+    toolSurface: KHATA_TOOL_SURFACE,
   },
   analytics: {
     id: "analytics",
     kind: "business",
     description: LOCKED_DESCRIPTIONS.analytics,
-    handler: async (objective) => unavailableStub("analytics", objective),
-    implemented: false,
-    toolSurface: [],
+    handler: executeAnalytics,
+    implemented: true,
+    toolSurface: ANALYTICS_TOOL_SURFACE,
   },
 };
 
@@ -174,6 +254,9 @@ export function getCapabilityContextForDecision(): string {
     `user_profile tools: ${USER_PROFILE_TOOL_SURFACE.join(", ")}`,
   );
   lines.push(`inventory tools: ${INVENTORY_TOOL_SURFACE.join(", ")}`);
+  lines.push(`billing tools: ${BILLING_TOOL_SURFACE.join(", ")}`);
+  lines.push(`khata tools: ${KHATA_TOOL_SURFACE.join(", ")}`);
+  lines.push(`analytics tools: ${ANALYTICS_TOOL_SURFACE.join(", ")}`);
   return lines.join("\n");
 }
 
@@ -195,6 +278,15 @@ export async function resolveFaithfulnessBuilder(
   }
   if (capabilityId === "inventory") {
     return ensureInventoryFaithfulnessBuilder();
+  }
+  if (capabilityId === "billing") {
+    return ensureBillingFaithfulnessBuilder();
+  }
+  if (capabilityId === "khata") {
+    return ensureKhataFaithfulnessBuilder();
+  }
+  if (capabilityId === "analytics") {
+    return ensureAnalyticsFaithfulnessBuilder();
   }
   return getFaithfulnessBuilder(capabilityId);
 }

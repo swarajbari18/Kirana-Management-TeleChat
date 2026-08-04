@@ -58,6 +58,23 @@ function resultStatusFromCapability(
   }
 }
 
+function buildPriorObjectiveResults(
+  step: CapabilityPlanStep,
+  phaseResult: ExecutionPhaseResult,
+): Record<string, Record<string, unknown>> {
+  const prior: Record<string, Record<string, unknown>> = {};
+  for (const depId of step.dependencies ?? []) {
+    const depEntry = phaseResult.objectives[depId];
+    if (
+      depEntry?.status === "completed" &&
+      depEntry.result?.status === "completed"
+    ) {
+      prior[depId] = depEntry.result.verifiedFacts;
+    }
+  }
+  return prior;
+}
+
 export async function executePhase(
   plan: StructuredCapabilityPlan,
   ctx: OrchestrationContext,
@@ -68,6 +85,17 @@ export async function executePhase(
   const phaseResult: ExecutionPhaseResult = { objectives: {} };
 
   for (const step of plan.objectives) {
+    const preserved = runContext.getPreservedObjectiveResult(
+      step.objectiveId,
+      step.capabilityId,
+    );
+    if (preserved) {
+      phaseResult.objectives[step.objectiveId] = {
+        status: "completed",
+        result: preserved,
+      };
+      continue;
+    }
     phaseResult.objectives[step.objectiveId] = { status: "pending" };
   }
 
@@ -100,7 +128,15 @@ export async function executePhase(
           objectiveId: step.objectiveId,
           capabilityId: step.capabilityId,
           objectiveDescription: step.objectiveDescription,
+          priorObjectiveResultKeys: Object.keys(
+            buildPriorObjectiveResults(step, phaseResult),
+          ),
         },
+      );
+
+      const priorObjectiveResults = buildPriorObjectiveResults(
+        step,
+        phaseResult,
       );
 
       const result = await invokeCapability(
@@ -108,6 +144,12 @@ export async function executePhase(
         {
           objectiveId: step.objectiveId,
           description: step.objectiveDescription,
+          draftTarget: step.draftTarget,
+          customerName: step.customerName,
+          priorObjectiveResults:
+            Object.keys(priorObjectiveResults).length > 0
+              ? priorObjectiveResults
+              : undefined,
         },
         ctx,
         runtimePorts,

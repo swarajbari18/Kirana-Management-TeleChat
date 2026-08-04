@@ -56,6 +56,8 @@ describe("capability blueprint STAT-01", () => {
           instructions: [],
           confirmationTimeoutMs: 300_000,
           completeAutonomy: false,
+          artifactsEnabled: true,
+          defaultPaymentMethod: null,
         },
         storeId: "s1",
         correlationId: "c1",

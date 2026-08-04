@@ -9,6 +9,8 @@ import type {
   OrchestrationContext,
   StructuredCapabilityPlan,
 } from "./types.js";
+import { buildOpenDraftSummaries } from "../store-durable-object/persistence/repositories/billing-repository.js";
+import { formatOpenDraftsSummaryForContext } from "../billing/draft-focus-resolver.js";
 
 const SYSTEM_PROMPT = `You are the Planning component of the Global Orchestrator for a Kirana shop assistant.
 
@@ -27,12 +29,16 @@ Output JSON shape:
       "objectiveId": "string",
       "objectiveDescription": "string",
       "capabilityId": "registered capability id",
-      "dependencies": ["other_objective_id_if_needed"]
+      "dependencies": ["other_objective_id_if_needed"],
+      "draftTarget": "optional — for billing only: implicit_latest (default) | new | by_customer | ambiguous. Classify from conversation when owner continues, starts fresh, names a customer draft, or is ambiguous among 2+ open drafts. Never emit bill_id.",
+      "customerName": "optional — for billing by_customer when customer name is clear"
     }
   ]
 }
 
 businessIntent must reflect the user's message, NOT repeat a single objectiveDescription verbatim when multiple objectives exist.
+
+Sale / finalize business operation: Finalizing a sale creates a financial record (billing), then reduces stock (inventory commit_bill_sale after finalize), and if payment is khata/udhar, records customer credit (khata). These are separate capabilities assigned as separate objectives with dependencies — not hidden inside billing. Cash/UPI sales do not need a khata objective. Product identity for a sale often starts with an inventory read before billing builds the draft.
 
 On replan or retry, use the evidence in the conversation context (prior plan, results, decisions, or verifier feedback) to revise intent, objectives, or assignments. Do not invent business facts.
 
@@ -50,11 +56,13 @@ export async function planCapabilities(
   harnessRetry?: import("./execution-engine/plan-verification.js").PlanVerificationResult,
 ): Promise<PlanCapabilitiesResult> {
   const userPrompt = runContext.planningContextSlice(mode, harnessRetry);
+  const openDrafts = await buildOpenDraftSummaries(runContext.db);
+  const promptWithDrafts = `${userPrompt}\n\n${formatOpenDraftsSummaryForContext(openDrafts)}`;
 
   const llmTrace = await generateJsonWithMeta<StructuredCapabilityPlan>(
     ctx.geminiApiKey,
     SYSTEM_PROMPT,
-    userPrompt,
+    promptWithDrafts,
   );
 
   return {

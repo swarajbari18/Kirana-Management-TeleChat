@@ -13,11 +13,14 @@ import {
 } from "./constants.js";
 import { decideNextAction } from "./decision-mode.js";
 import { executePhase } from "./execution-engine/index.js";
+import { checkSaleCollaborationInvariant } from "./execution-engine/collaboration-invariants.js";
 import { verifyCapabilityPlan } from "./execution-engine/plan-verification.js";
 import { verifyGroundedResponse } from "./faithfulness/index.js";
 import { planCapabilities } from "./planning-mode.js";
 import { generateAskUserResponse } from "./response-generation.js";
+import type { ExecutionPhaseResult } from "./execution-engine/types.js";
 import type { OrchestrationContext } from "./types.js";
+import type { OutboundAttachment } from "../worker-telegram-adapter/contracts/index.js";
 
 function terminalSafeOutcome(text: string): ExecutionResult {
   return {
@@ -27,12 +30,33 @@ function terminalSafeOutcome(text: string): ExecutionResult {
   };
 }
 
-function deliver(text: string): ExecutionResult {
+function deliver(text: string, attachments: OutboundAttachment[] = []): ExecutionResult {
   return {
     status: "ok",
     messages: [{ type: "text", text }],
-    attachments: [],
+    attachments,
   };
+}
+
+function collectAttachments(phaseResult: ExecutionPhaseResult): OutboundAttachment[] {
+  const attachments: OutboundAttachment[] = [];
+  for (const entry of Object.values(phaseResult.objectives)) {
+    if (entry.result?.status !== "completed" || !entry.result.attachments) {
+      continue;
+    }
+    for (const attachment of entry.result.attachments) {
+      attachments.push({
+        type: "document",
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        data: attachment.bytes.buffer.slice(
+          attachment.bytes.byteOffset,
+          attachment.bytes.byteOffset + attachment.bytes.byteLength,
+        ) as ArrayBuffer,
+      });
+    }
+  }
+  return attachments;
 }
 
 export async function orchestrate(
@@ -147,6 +171,43 @@ export async function orchestrate(
 
       await runContext.buildRegistryFromPhaseResult(plan, phaseResult);
 
+      const collaborationCheck = checkSaleCollaborationInvariant(
+        plan,
+        phaseResult,
+      );
+
+      if (!collaborationCheck.ok) {
+        await runContext.appendTrace(
+          "go",
+          "global_orchestrator",
+          "COLLABORATION_INVARIANT_FAILED",
+          {
+            diagnostics: collaborationCheck.diagnostics,
+            billId: collaborationCheck.billId,
+            paymentMethod: collaborationCheck.paymentMethod,
+            replanNarrative: collaborationCheck.replanNarrative,
+          },
+        );
+
+        runContext.collaborationReplanNarrative =
+          collaborationCheck.replanNarrative;
+        runContext.recordReplanVersion(plan, phaseResult, {
+          action: "replan",
+          rationale: collaborationCheck.replanNarrative,
+        });
+        continue;
+      }
+
+      if (runContext.collaborationReplanNarrative) {
+        await runContext.appendTrace(
+          "go",
+          "global_orchestrator",
+          "COLLABORATION_INVARIANT_SATISFIED",
+          { priorNarrative: runContext.collaborationReplanNarrative },
+        );
+        runContext.collaborationReplanNarrative = null;
+      }
+
       const { decision, llmTrace: decisionTrace } = await decideNextAction(
         ctx,
         runContext,
@@ -204,7 +265,7 @@ export async function orchestrate(
         );
 
         runContext.discard();
-        return deliver(response.text);
+        return deliver(response.text, collectAttachments(phaseResult));
       }
 
       const finalText = await verifyGroundedResponse(
@@ -215,7 +276,7 @@ export async function orchestrate(
       );
 
       runContext.discard();
-      return deliver(finalText);
+      return deliver(finalText, collectAttachments(phaseResult));
     }
 
     await runContext.appendTrace(

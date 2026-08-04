@@ -28,6 +28,8 @@ const baseCtx = {
     instructions: [],
     confirmationTimeoutMs: 300_000,
     completeAutonomy: false,
+    artifactsEnabled: true,
+    defaultPaymentMethod: null,
   },
 } satisfies OrchestrationContext;
 
@@ -35,6 +37,7 @@ function mockRunContext() {
   return {
     appendTrace: vi.fn(async () => "evt-1"),
     storeBcInvocation: vi.fn(),
+    getPreservedObjectiveResult: vi.fn(() => undefined),
   };
 }
 
@@ -220,5 +223,59 @@ describe("executePhase dependency scheduler", () => {
     expect(result.objectives.o1?.status).toBe("unavailable");
     expect(result.objectives.o2?.status).toBe("skipped_blocked");
     expect(mockedInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("BP-CROSS-01 passes priorObjectiveResults from completed dependencies", async () => {
+    mockedInvoke.mockImplementation(async (_id, objective) => {
+      if (objective.objectiveId === "bill") {
+        return {
+          status: "completed",
+          verifiedFacts: {
+            finalized: true,
+            bill_id: "bill-abc",
+            payment_method: "cash",
+          },
+        } satisfies CapabilityResult;
+      }
+      return {
+        status: "completed",
+        verifiedFacts: { sale_committed: true },
+      } satisfies CapabilityResult;
+    });
+
+    const plan: StructuredCapabilityPlan = {
+      businessIntent: "sale",
+      objectives: [
+        {
+          objectiveId: "bill",
+          objectiveDescription: "finalize",
+          capabilityId: "billing",
+          dependencies: [],
+        },
+        {
+          objectiveId: "inv",
+          objectiveDescription: "commit",
+          capabilityId: "inventory",
+          dependencies: ["bill"],
+        },
+      ],
+    };
+
+    await executePhase(
+      plan,
+      baseCtx,
+      {} as never,
+      {} as never,
+      mockRunContext() as never,
+    );
+
+    const invCall = mockedInvoke.mock.calls.find(
+      ([, obj]) => obj.objectiveId === "inv",
+    );
+    expect(invCall?.[1].priorObjectiveResults?.bill).toEqual({
+      finalized: true,
+      bill_id: "bill-abc",
+      payment_method: "cash",
+    });
   });
 });

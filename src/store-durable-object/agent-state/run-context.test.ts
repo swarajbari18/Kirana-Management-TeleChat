@@ -20,6 +20,8 @@ const baseCtx = {
     instructions: [],
     confirmationTimeoutMs: 300_000,
     completeAutonomy: false,
+    artifactsEnabled: true,
+    defaultPaymentMethod: null,
   },
 };
 

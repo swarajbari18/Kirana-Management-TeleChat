@@ -30,12 +30,18 @@ export interface AgentStatePriorResults {
 export interface ToolExecutionPlanContext {
   orderedOperations: StructuredToolPlan["operations"];
   currentOperationId: string;
+  priorObjectiveResults?: Record<string, Record<string, unknown>>;
 }
 
 export interface ToolStepResult {
   verifiedFacts: Record<string, unknown>;
   agentState: Record<string, unknown>;
   refusalMessage?: string;
+  attachments?: Array<{
+    filename: string;
+    mimeType: string;
+    bytes: Uint8Array;
+  }>;
 }
 
 export type ToolExecutor = (
@@ -87,6 +93,11 @@ async function planTools(
   if (priorResults) {
     parts.push(
       `Prior execution results:\n${JSON.stringify(priorResults, null, 2)}`,
+    );
+  }
+  if (objective.priorObjectiveResults) {
+    parts.push(
+      `Dependency verified facts:\n${JSON.stringify(objective.priorObjectiveResults, null, 2)}`,
     );
   }
   if (harnessDiagnostic) {
@@ -213,6 +224,11 @@ export function createCapabilityExecutor(
 
       const ordered = config.sortByDependencies(plan.operations);
       const facts: Record<string, unknown> = {};
+      const attachments: Array<{
+        filename: string;
+        mimeType: string;
+        bytes: Uint8Array;
+      }> = [];
       const l1ToolResults: AgentStatePriorResults = {
         byOperationId: new Map(),
         byToolName: new Map(),
@@ -324,12 +340,16 @@ export function createCapabilityExecutor(
           {
             orderedOperations: ordered,
             currentOperationId: step.operationId,
+            priorObjectiveResults: objective.priorObjectiveResults,
           },
         );
 
         l1ToolResults.byOperationId.set(step.operationId, toolResult.agentState);
         l1ToolResults.byToolName.set(step.toolName, toolResult.agentState);
         Object.assign(facts, toolResult.verifiedFacts);
+        if (toolResult.attachments?.length) {
+          attachments.push(...toolResult.attachments);
+        }
 
         if (runContext) {
           await runContext.appendTrace(
@@ -352,6 +372,7 @@ export function createCapabilityExecutor(
             status: "completed",
             verifiedFacts: facts,
             refusalMessage: toolResult.refusalMessage,
+            attachments: attachments.length > 0 ? attachments : undefined,
           };
           if (runContext) {
             runContext.storeBcInvocation(objective.objectiveId, plan, refusalResult);
@@ -364,10 +385,15 @@ export function createCapabilityExecutor(
         runContext.storeBcInvocation(objective.objectiveId, plan, {
           status: "completed",
           verifiedFacts: facts,
+          attachments: attachments.length > 0 ? attachments : undefined,
         });
       }
 
-      return { status: "completed", verifiedFacts: facts };
+      return {
+        status: "completed",
+        verifiedFacts: facts,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      };
     } catch (error) {
       return config.mapToolError(error);
     }

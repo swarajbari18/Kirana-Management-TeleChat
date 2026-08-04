@@ -7,6 +7,10 @@ import type {
 import {
   inferUserProfileToolName,
 } from "./user-profile-fact-registry.js";
+import { inferInventoryToolName } from "./inventory-fact-registry.js";
+import { inferBillingToolName } from "./billing-fact-registry.js";
+import { inferKhataToolName } from "./khata-fact-registry.js";
+import { inferAnalyticsToolName } from "./analytics-fact-registry.js";
 import { resolveFaithfulnessBuilder } from "../../capability-registry/index.js";
 
 export async function buildRegistryFromPhaseResult(
@@ -38,7 +42,15 @@ export async function buildRegistryFromPhaseResult(
     const toolName =
       capabilityId === "user_profile"
         ? inferUserProfileToolName(result.verifiedFacts)
-        : "unknown";
+        : capabilityId === "inventory"
+          ? inferInventoryToolName(result.verifiedFacts)
+          : capabilityId === "billing"
+            ? inferBillingToolName(result.verifiedFacts)
+            : capabilityId === "khata"
+              ? inferKhataToolName(result.verifiedFacts)
+              : capabilityId === "analytics"
+                ? inferAnalyticsToolName()
+                : "unknown";
 
     const records = builder(
       objectiveId,

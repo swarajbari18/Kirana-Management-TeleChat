@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const storeMeta = sqliteTable("store_meta", {
   id: integer("id").primaryKey(),
@@ -51,6 +51,10 @@ export const shopProfile = sqliteTable("shop_profile", {
   completeAutonomy: integer("complete_autonomy", { mode: "boolean" })
     .notNull()
     .default(false),
+  artifactsEnabled: integer("artifacts_enabled", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  defaultPaymentMethod: text("default_payment_method"),
   updatedAt: text("updated_at").notNull(),
 });
 
@@ -163,4 +167,99 @@ export const inventoryReservations = sqliteTable("inventory_reservations", {
   idempotencyKey: text("idempotency_key").notNull(),
   createdAt: text("created_at").notNull(),
   resolvedAt: text("resolved_at"),
+});
+
+export const billingDrafts = sqliteTable("billing_drafts", {
+  billId: text("bill_id").primaryKey(),
+  status: text("status").notNull(),
+  customerName: text("customer_name"),
+  lastEventAt: text("last_event_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  finalizedAt: text("finalized_at"),
+});
+
+export const billingDraftEvents = sqliteTable("billing_draft_events", {
+  id: text("id").primaryKey(),
+  billId: text("bill_id")
+    .notNull()
+    .references(() => billingDrafts.billId),
+  eventType: text("event_type").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  updateId: integer("update_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const billingBills = sqliteTable("billing_bills", {
+  billId: text("bill_id").primaryKey(),
+  customerName: text("customer_name").notNull(),
+  notes: text("notes"),
+  paymentMethod: text("payment_method").notNull(),
+  paymentReference: text("payment_reference"),
+  subtotalPaise: integer("subtotal_paise").notNull(),
+  cgstTotalPaise: integer("cgst_total_paise").notNull(),
+  sgstTotalPaise: integer("sgst_total_paise").notNull(),
+  grandTotalPaise: integer("grand_total_paise").notNull(),
+  finalizedAt: text("finalized_at").notNull(),
+  updateId: integer("update_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+});
+
+export const billingBillLines = sqliteTable("billing_bill_lines", {
+  id: text("id").primaryKey(),
+  billId: text("bill_id")
+    .notNull()
+    .references(() => billingBills.billId),
+  lineNo: integer("line_no").notNull(),
+  sku: text("sku").notNull(),
+  productName: text("product_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unit: text("unit").notNull(),
+  sellPricePaise: integer("sell_price_paise").notNull(),
+  hsnCode: text("hsn_code").notNull(),
+  gstRate: integer("gst_rate").notNull(),
+  taxablePaise: integer("taxable_paise").notNull(),
+  cgstPaise: integer("cgst_paise").notNull(),
+  sgstPaise: integer("sgst_paise").notNull(),
+  lineTotalPaise: integer("line_total_paise").notNull(),
+});
+
+export const khataCustomers = sqliteTable("khata_customers", {
+  id: text("id").primaryKey(),
+  canonicalName: text("canonical_name").notNull(),
+  normalizedName: text("normalized_name").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const khataCustomerAliases = sqliteTable(
+  "khata_customer_aliases",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: text("customer_id")
+      .notNull()
+      .references(() => khataCustomers.id),
+    alias: text("alias").notNull(),
+  },
+  (table) => ({
+    customerAliasUnique: uniqueIndex("khata_customer_aliases_customer_alias").on(
+      table.customerId,
+      table.alias,
+    ),
+  }),
+);
+
+export const khataLedgerEntries = sqliteTable("khata_ledger_entries", {
+  id: text("id").primaryKey(),
+  customerId: text("customer_id")
+    .notNull()
+    .references(() => khataCustomers.id),
+  entryType: text("entry_type").notNull(),
+  amountPaise: integer("amount_paise").notNull(),
+  referenceType: text("reference_type").notNull(),
+  referenceId: text("reference_id").notNull(),
+  balanceAfterPaise: integer("balance_after_paise").notNull(),
+  notes: text("notes"),
+  updateId: integer("update_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  createdAt: text("created_at").notNull(),
 });

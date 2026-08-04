@@ -30,6 +30,8 @@ export interface CapabilityPlanStep {
   objectiveDescription: string;
   capabilityId: string;
   dependencies: string[];
+  draftTarget?: "implicit_latest" | "new" | "by_customer" | "ambiguous";
+  customerName?: string;
 }
 
 export interface StructuredCapabilityPlan {

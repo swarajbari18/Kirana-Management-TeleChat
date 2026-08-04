@@ -82,7 +82,7 @@ export async function registerInventory(
       verifiedFacts: {},
       agentState: { refused: true },
       refusalMessage:
-        "Stock cannot be reduced via register_inventory. To reduce inventory, create a bill (billing will handle stock decrease).",
+        "Stock cannot be reduced via register_inventory. To reduce inventory for a sale, finalize a bill and use commit_bill_sale.",
     };
   }
 

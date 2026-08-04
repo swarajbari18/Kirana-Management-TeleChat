@@ -299,7 +299,7 @@ describe("update_inventory INV-U-03", () => {
       priorOne,
       ctx,
     );
-    expect(result.refusalMessage).toContain("billing");
+    expect(result.refusalMessage).toContain("commit_bill_sale");
     expect(mockedUpdate).not.toHaveBeenCalled();
   });
 });

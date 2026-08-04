@@ -11,12 +11,14 @@ const KNOWN_TOOLS = new Set([
   "register_inventory",
   "update_inventory",
   "allocate_inventory",
+  "commit_bill_sale",
 ]);
 
 const WRITE_TOOLS = new Set([
   "register_inventory",
   "update_inventory",
   "allocate_inventory",
+  "commit_bill_sale",
 ]);
 
 const VALID_GST_RATES = new Set([0, 5, 12, 18]);
@@ -169,6 +171,26 @@ export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationRe
       if (p.quantity === undefined || p.draft_bill_id === undefined || p.idempotency_key === undefined) {
         diagnostics.push(
           "allocate_inventory requires quantity, draft_bill_id, and idempotency_key",
+        );
+        return { valid: false, reason: diagnostics[0], diagnostics };
+      }
+    }
+
+    if (op.toolName === "commit_bill_sale") {
+      if (typeof op.parameters.bill_id !== "string" || !op.parameters.bill_id) {
+        diagnostics.push("commit_bill_sale requires bill_id parameter");
+        return { valid: false, reason: diagnostics[0], diagnostics };
+      }
+      const hasOtherWrites = plan.operations.some(
+        (other) =>
+          other.operationId !== op.operationId &&
+          ["register_inventory", "update_inventory", "allocate_inventory"].includes(
+            other.toolName,
+          ),
+      );
+      if (hasOtherWrites) {
+        diagnostics.push(
+          "commit_bill_sale cannot be mixed with register_inventory, update_inventory, or allocate_inventory",
         );
         return { valid: false, reason: diagnostics[0], diagnostics };
       }

@@ -34,28 +34,116 @@ describe("capability registry REG-01", () => {
     expect(text).toContain("read_shop_profile");
     expect(text).toContain("inventory tools:");
     expect(text).toContain("query_inventory");
+    expect(text).toContain("billing tools:");
+    expect(text).toContain("manage_draft_bill");
+    expect(text).toContain("khata tools:");
+    expect(text).toContain("query_khata");
+    expect(text).toContain("analytics tools:");
+    expect(text).toContain("generate_analytics");
   });
 });
 
 describe("capability registry REG-02", () => {
-  const stubIds = ["billing", "khata", "analytics"] as const;
-
-  for (const id of stubIds) {
-    it(`${id} stub returns unavailable`, async () => {
-      const result = await invokeCapability(
-        id,
-        { objectiveId: "o1", description: "test" },
-        {} as never,
-        {} as never,
-        {} as never,
-      );
-      expect(result).toEqual({
-        status: "unavailable",
-        capabilityId: id,
-        reason: "not_implemented",
-      });
+  it("analytics returns completed without blueprint stub", async () => {
+    const result = await invokeCapability(
+      "analytics",
+      { objectiveId: "o1", description: "today sales" },
+      {
+        geminiApiKey: "fake",
+        inbound: { kind: "text", text: "test" },
+        ownerProfile: {
+          shopName: null,
+          ownerName: null,
+          gstRegistered: null,
+          gstin: null,
+          instructions: [],
+          confirmationTimeoutMs: 300_000,
+          completeAutonomy: false,
+          artifactsEnabled: true,
+          defaultPaymentMethod: null,
+        },
+        storeId: "s1",
+        correlationId: "c1",
+        updateId: 1,
+        chatId: 1,
+        activeSessionId: "sess",
+        turns: [],
+        storeInitialized: true,
+      },
+      {} as never,
+      {} as never,
+    );
+    expect(result.status).toBe("completed");
+    expect(result).not.toEqual({
+      status: "unavailable",
+      capabilityId: "analytics",
+      reason: "not_implemented",
     });
-  }
+  });
+
+  it("khata is implemented (not unavailable stub)", async () => {
+    const result = await invokeCapability(
+      "khata",
+      { objectiveId: "o1", description: "test" },
+      {
+        geminiApiKey: "fake",
+        inbound: { kind: "text", text: "test" },
+        ownerProfile: {
+          shopName: null,
+          ownerName: null,
+          gstRegistered: null,
+          gstin: null,
+          instructions: [],
+          confirmationTimeoutMs: 300_000,
+          completeAutonomy: false,
+          artifactsEnabled: true,
+          defaultPaymentMethod: null,
+        },
+        storeId: "s1",
+        correlationId: "c1",
+        updateId: 1,
+        chatId: 1,
+        activeSessionId: "sess",
+        turns: [],
+        storeInitialized: true,
+      },
+      {} as never,
+      {} as never,
+    );
+    expect(result.status).not.toBe("unavailable");
+  });
+
+  it("billing is implemented (not unavailable stub)", async () => {
+    const result = await invokeCapability(
+      "billing",
+      { objectiveId: "o1", description: "test" },
+      {
+        geminiApiKey: "fake",
+        inbound: { kind: "text", text: "test" },
+        ownerProfile: {
+          shopName: null,
+          ownerName: null,
+          gstRegistered: null,
+          gstin: null,
+          instructions: [],
+          confirmationTimeoutMs: 300_000,
+          completeAutonomy: false,
+          artifactsEnabled: true,
+          defaultPaymentMethod: null,
+        },
+        storeId: "s1",
+        correlationId: "c1",
+        updateId: 1,
+        chatId: 1,
+        activeSessionId: "sess",
+        turns: [],
+        storeInitialized: true,
+      },
+      {} as never,
+      {} as never,
+    );
+    expect(result.status).not.toBe("unavailable");
+  });
 
   it("inventory is implemented (not unavailable stub)", async () => {
     const result = await invokeCapability(
@@ -72,6 +160,8 @@ describe("capability registry REG-02", () => {
           instructions: [],
           confirmationTimeoutMs: 300_000,
           completeAutonomy: false,
+          artifactsEnabled: true,
+          defaultPaymentMethod: null,
         },
         storeId: "s1",
         correlationId: "c1",

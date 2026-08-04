@@ -81,7 +81,10 @@ Planning JSON includes top-level `businessIntent` — separate from `objectiveDe
 | Component | Action |
 |-----------|--------|
 | MSP tools | Registry builder only — output shape OK |
-| Inventory (C5.1) | `inventory-fact-registry.ts` — per `(sku, field)`; tools: `query_inventory`, `register_inventory`, `update_inventory`, `allocate_inventory` |
+| Inventory (C5.1) | `inventory-fact-registry.ts` — per `(sku, field)`; tools: `query_inventory`, `register_inventory`, `update_inventory`, `allocate_inventory`, `commit_bill_sale` |
+| Billing (C5.2) | `billing-fact-registry.ts` — draft line snapshots and finalized bill totals; tools: `manage_draft_bill`, `finalize_bill`, `query_bill`. `refusalMessage` (e.g. oversell) is never in the Fact Catalog. Invoice artifact bytes are not facts. |
+| Khata (C5.3) | `khata-fact-registry.ts` — per-customer balance, entry amounts; tools: `query_khata`, `manage_khata_transaction`. Entry types: `credit_sale`, `manual_credit`, `payment`. |
+| Analytics (C5.4) | `analytics-fact-registry.ts` — **daily summary scalars only** (`today_total_sales_paise`, `today_bill_count`, `today_gst_collected_paise`, `total_outstanding_udhar_paise`, `today_payment_*_paise`, `analysis_attached`). Tool: `generate_analytics` (zero parameters). Weekly/monthly/yearly metrics and artifact content are **not** in the Fact Catalog. `refusalMessage` for empty shop is never a fact. |
 | C4 claim extractor | **Removed** |
 | `accumulateVerifiedFacts` flat mapping | **Removed** — use `VerifiedFactRecord` registry |
 

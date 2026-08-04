@@ -229,6 +229,8 @@ At plan verification, for each operation, after type checks, apply substring gro
 
 ### 2.7 Stock direction rules
 
+> **Superseded by Component 5.3** — sale stock decreases use `commit_bill_sale` after billing finalize, not billing itself.
+
 - `register_inventory` / `update_inventory`: quantity change must be **> 0**. Otherwise return `completed` with `refusalMessage` telling the owner that stock reduction is done by creating a bill (possibly a dummy bill with notes in Component 5.2). No SQLite write.
 - No delete-stock / write-down inventory tool in 5.1.
 - `allocate_inventory`: manages **reserved** quantity. Available = `quantity_on_hand - sum(active reservations)`.

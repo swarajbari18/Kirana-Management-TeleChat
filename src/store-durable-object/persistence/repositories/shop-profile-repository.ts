@@ -10,6 +10,8 @@ export interface ShopProfileSnapshot {
   instructions: string[];
   confirmationTimeoutMs: number;
   completeAutonomy: boolean;
+  artifactsEnabled: boolean;
+  defaultPaymentMethod: "cash" | "upi" | "khata" | null;
 }
 
 const DEFAULT_PROFILE: ShopProfileSnapshot = {
@@ -20,6 +22,8 @@ const DEFAULT_PROFILE: ShopProfileSnapshot = {
   instructions: [],
   confirmationTimeoutMs: 300_000,
   completeAutonomy: false,
+  artifactsEnabled: true,
+  defaultPaymentMethod: null,
 };
 
 function parseInstructions(json: string): string[] {
@@ -35,6 +39,7 @@ function parseInstructions(json: string): string[] {
 }
 
 function rowToSnapshot(row: typeof shopProfile.$inferSelect): ShopProfileSnapshot {
+  const payment = row.defaultPaymentMethod;
   return {
     shopName: row.shopName,
     ownerName: row.ownerName,
@@ -43,6 +48,11 @@ function rowToSnapshot(row: typeof shopProfile.$inferSelect): ShopProfileSnapsho
     instructions: parseInstructions(row.instructionsJson),
     confirmationTimeoutMs: row.confirmationTimeoutMs,
     completeAutonomy: row.completeAutonomy,
+    artifactsEnabled: row.artifactsEnabled,
+    defaultPaymentMethod:
+      payment === "cash" || payment === "upi" || payment === "khata"
+        ? payment
+        : null,
   };
 }
 
@@ -70,6 +80,7 @@ export async function ensureShopProfileRow(db: StoreDatabase): Promise<void> {
     instructionsJson: "[]",
     confirmationTimeoutMs: 300_000,
     completeAutonomy: false,
+    artifactsEnabled: true,
     updatedAt: new Date().toISOString(),
   });
 }
@@ -82,6 +93,8 @@ export interface ShopProfileWrite {
   instructions?: string[];
   confirmationTimeoutMs?: number;
   completeAutonomy?: boolean;
+  artifactsEnabled?: boolean;
+  defaultPaymentMethod?: "cash" | "upi" | "khata" | null;
 }
 
 export async function updateShopProfile(
@@ -109,6 +122,14 @@ export async function updateShopProfile(
       write.completeAutonomy !== undefined
         ? write.completeAutonomy
         : current.completeAutonomy,
+    artifactsEnabled:
+      write.artifactsEnabled !== undefined
+        ? write.artifactsEnabled
+        : current.artifactsEnabled,
+    defaultPaymentMethod:
+      write.defaultPaymentMethod !== undefined
+        ? write.defaultPaymentMethod
+        : current.defaultPaymentMethod,
   };
 
   await db
@@ -121,6 +142,8 @@ export async function updateShopProfile(
       instructionsJson: JSON.stringify(updated.instructions),
       confirmationTimeoutMs: updated.confirmationTimeoutMs,
       completeAutonomy: updated.completeAutonomy,
+      artifactsEnabled: updated.artifactsEnabled,
+      defaultPaymentMethod: updated.defaultPaymentMethod,
       updatedAt: new Date().toISOString(),
     })
     .where(eq(shopProfile.id, 1));

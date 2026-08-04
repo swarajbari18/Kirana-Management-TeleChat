@@ -89,6 +89,9 @@ export function inferInventoryToolName(
   if ("reservationId" in verifiedFacts || "reservedQuantity" in verifiedFacts) {
     return "allocate_inventory";
   }
+  if ("sale_committed" in verifiedFacts || "billId" in verifiedFacts) {
+    return "commit_bill_sale";
+  }
   if ("quantityDelta" in verifiedFacts) {
     return "update_inventory";
   }

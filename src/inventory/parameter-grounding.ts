@@ -109,6 +109,9 @@ export function parameterGroundingCheck(
       return { valid: true };
     }
 
+    case "commit_bill_sale":
+      return { valid: true };
+
     default:
       return { valid: true };
   }

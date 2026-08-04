@@ -3,6 +3,11 @@ export type CapabilityResult =
       status: "completed";
       verifiedFacts: Record<string, unknown>;
       refusalMessage?: string;
+      attachments?: Array<{
+        filename: string;
+        mimeType: string;
+        bytes: Uint8Array;
+      }>;
     }
   | { status: "clarification_needed"; reason: string; requiredInfo: string }
   | { status: "denied"; reason: "user_rejected" | "not_confirmed" | "timeout" }

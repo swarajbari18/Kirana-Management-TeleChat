@@ -39,6 +39,8 @@ export type TraceStage =
   | "RESPONSE_GENERATED"
   | "FAITHFULNESS_VERIFIED"
   | "FAITHFULNESS_FAILED"
+  | "COLLABORATION_INVARIANT_FAILED"
+  | "COLLABORATION_INVARIANT_SATISFIED"
   | "ORCHESTRATION_ERROR";
 
 export type TraceLayer =
@@ -116,6 +118,11 @@ export class RunContext {
   priorDecisions: DecisionResult[] = [];
   nextSeq = 1;
   contextAssembled = false;
+  collaborationReplanNarrative: string | null = null;
+  private preservedCompletedObjectives = new Map<
+    string,
+    { capabilityId: string; result: CapabilityResult }
+  >();
 
   constructor(
     readonly db: StoreDatabase,
@@ -210,6 +217,11 @@ export class RunContext {
       if (this.verifiedFactRegistry.size > 0) {
         parts.push(
           `Verified facts:\n${JSON.stringify(factsForDecision(this.verifiedFactRegistry))}`,
+        );
+      }
+      if (this.collaborationReplanNarrative) {
+        parts.push(
+          `Collaboration invariant feedback:\n${this.collaborationReplanNarrative}`,
         );
       }
     }
@@ -328,6 +340,7 @@ export class RunContext {
     phaseResult: ExecutionPhaseResult,
     decision?: DecisionResult,
   ): void {
+    this.preserveCompletedObjectives(plan, phaseResult);
     this.replanHistory.push({
       planVersion: this.planVersion,
       plan,
@@ -337,6 +350,35 @@ export class RunContext {
     this.planVersion += 1;
     this.currentPlan = null;
     this.objectiveStates.clear();
+  }
+
+  preserveCompletedObjectives(
+    plan: StructuredCapabilityPlan,
+    phaseResult: ExecutionPhaseResult,
+  ): void {
+    for (const step of plan.objectives) {
+      const entry = phaseResult.objectives[step.objectiveId];
+      if (
+        entry?.status === "completed" &&
+        entry.result?.status === "completed"
+      ) {
+        this.preservedCompletedObjectives.set(step.objectiveId, {
+          capabilityId: step.capabilityId,
+          result: entry.result,
+        });
+      }
+    }
+  }
+
+  getPreservedObjectiveResult(
+    objectiveId: string,
+    capabilityId: string,
+  ): CapabilityResult | undefined {
+    const preserved = this.preservedCompletedObjectives.get(objectiveId);
+    if (!preserved || preserved.capabilityId !== capabilityId) {
+      return undefined;
+    }
+    return preserved.result;
   }
 
   getBcPriorPlan(objectiveId: string): unknown | undefined {
