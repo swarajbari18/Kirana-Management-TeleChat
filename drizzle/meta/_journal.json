@@ -38,6 +38,13 @@
       "breakpoints": true
     },
     {
+      "idx": 5,
+      "version": "6",
+      "when": 1785706000000,
+      "tag": "0005_component_5_2_billing",
+      "breakpoints": true
+    },
+    {
       "idx": 6,
       "version": "6",
       "when": 1785707000000,
