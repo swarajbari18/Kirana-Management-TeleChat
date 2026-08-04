@@ -6,6 +6,7 @@ import {
   billingDraftEvents,
   billingDrafts,
 } from "../schema.js";
+import { normalizeProductKey } from "./inventory-repository.js";
 
 export type DraftStatus = "open" | "finalized" | "cancelled";
 export type PaymentMethod = "cash" | "upi" | "khata";
@@ -442,16 +443,4 @@ export async function listRecentFinalizedBills(
     updateId: row.updateId,
     correlationId: row.correlationId,
   }));
-}
-
-export async function getProductQuantityOnHand(
-  db: StoreDatabase,
-  sku: string,
-): Promise<number | null> {
-  const row = await db
-    .select({ quantityOnHand: inventoryProducts.quantityOnHand })
-    .from(inventoryProducts)
-    .where(eq(inventoryProducts.sku, sku))
-    .get();
-  return row?.quantityOnHand ?? null;
 }

@@ -1,4 +1,4 @@
-import type { ToolPlanStep } from "../../capability-registry/types.js";
+import type { ToolPlanStep } from "../capability-registry/types.js";
 
 export interface ParameterGroundingResult {
   valid: boolean;

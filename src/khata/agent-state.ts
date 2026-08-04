@@ -1,5 +1,5 @@
-import type { AgentStatePriorResults } from "../../capability-registry/capability-blueprint.js";
-import type { KhataCustomerMatch } from "../../store-durable-object/persistence/repositories/khata-repository.js";
+import type { AgentStatePriorResults } from "../capability-registry/capability-blueprint.js";
+import type { KhataCustomerMatch } from "../store-durable-object/persistence/repositories/khata-repository.js";
 import type { SimilarCustomerCandidate } from "./errors.js";
 
 export interface QueryKhataAgentState {
