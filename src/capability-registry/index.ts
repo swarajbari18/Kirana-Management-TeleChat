@@ -8,6 +8,10 @@ import {
   executeUserProfile,
   USER_PROFILE_TOOL_SURFACE,
 } from "../user-profile/index.js";
+import {
+  executeInventory,
+  INVENTORY_TOOL_SURFACE,
+} from "../inventory/index.js";
 import { unavailableStub } from "./unavailable-stub.js";
 
 export interface BusinessObjective {
@@ -78,6 +82,28 @@ async function ensureUserProfileFaithfulnessBuilder(): Promise<FaithfulnessBuild
   return userProfileFaithfulnessBuilder;
 }
 
+async function importInventoryFaithfulnessBuilder(): Promise<FaithfulnessBuilder> {
+  const { buildInventoryFactRecords } = await import(
+    "../global-orchestrator/verified-facts/inventory-fact-registry.js"
+  );
+  return (objectiveId, capabilityId, toolName, verifiedFacts) =>
+    buildInventoryFactRecords(
+      objectiveId,
+      capabilityId,
+      toolName,
+      verifiedFacts,
+    );
+}
+
+let inventoryFaithfulnessBuilder: FaithfulnessBuilder | undefined;
+
+async function ensureInventoryFaithfulnessBuilder(): Promise<FaithfulnessBuilder> {
+  if (!inventoryFaithfulnessBuilder) {
+    inventoryFaithfulnessBuilder = await importInventoryFaithfulnessBuilder();
+  }
+  return inventoryFaithfulnessBuilder;
+}
+
 const registry: Record<string, RegistryEntry> = {
   user_profile: {
     id: "user_profile",
@@ -91,9 +117,9 @@ const registry: Record<string, RegistryEntry> = {
     id: "inventory",
     kind: "business",
     description: LOCKED_DESCRIPTIONS.inventory,
-    handler: async (objective) => unavailableStub("inventory", objective),
-    implemented: false,
-    toolSurface: [],
+    handler: executeInventory,
+    implemented: true,
+    toolSurface: INVENTORY_TOOL_SURFACE,
   },
   billing: {
     id: "billing",
@@ -147,6 +173,7 @@ export function getCapabilityContextForDecision(): string {
   lines.push(
     `user_profile tools: ${USER_PROFILE_TOOL_SURFACE.join(", ")}`,
   );
+  lines.push(`inventory tools: ${INVENTORY_TOOL_SURFACE.join(", ")}`);
   return lines.join("\n");
 }
 
@@ -165,6 +192,9 @@ export async function resolveFaithfulnessBuilder(
 ): Promise<FaithfulnessBuilder | undefined> {
   if (capabilityId === "user_profile") {
     return ensureUserProfileFaithfulnessBuilder();
+  }
+  if (capabilityId === "inventory") {
+    return ensureInventoryFaithfulnessBuilder();
   }
   return getFaithfulnessBuilder(capabilityId);
 }

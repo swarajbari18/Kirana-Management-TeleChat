@@ -81,7 +81,7 @@ Planning JSON includes top-level `businessIntent` — separate from `objectiveDe
 | Component | Action |
 |-----------|--------|
 | MSP tools | Registry builder only — output shape OK |
-| Inventory (C5) | New `inventory-fact-registry.ts` + INV fixtures |
+| Inventory (C5.1) | `inventory-fact-registry.ts` — per `(sku, field)`; tools: `query_inventory`, `register_inventory`, `update_inventory`, `allocate_inventory` |
 | C4 claim extractor | **Removed** |
 | `accumulateVerifiedFacts` flat mapping | **Removed** — use `VerifiedFactRecord` registry |
 

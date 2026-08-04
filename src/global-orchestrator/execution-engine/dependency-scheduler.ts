@@ -129,7 +129,10 @@ export async function executePhase(
           status,
           resultSummary:
             result.status === "completed"
-              ? Object.keys(result.verifiedFacts)
+              ? {
+                  verifiedFactKeys: Object.keys(result.verifiedFacts),
+                  refusalMessage: result.refusalMessage,
+                }
               : result,
         },
         parentEventId,

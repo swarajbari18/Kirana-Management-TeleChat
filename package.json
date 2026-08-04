@@ -9,7 +9,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "eval:5.0": "npx --yes tsx scripts/eval/run-queries-5.0.ts"
+    "eval": "npx --yes tsx scripts/eval/run-evaluation-queries.ts",
+    "eval:5.0": "npx --yes tsx scripts/eval/run-queries-5.0.ts",
+    "eval:5.1": "npm run eval"
   },
   "dependencies": {
     "@grammyjs/types": "^3.17.0",

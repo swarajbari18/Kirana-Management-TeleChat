@@ -1,5 +1,9 @@
 export type CapabilityResult =
-  | { status: "completed"; verifiedFacts: Record<string, unknown> }
+  | {
+      status: "completed";
+      verifiedFacts: Record<string, unknown>;
+      refusalMessage?: string;
+    }
   | { status: "clarification_needed"; reason: string; requiredInfo: string }
   | { status: "denied"; reason: "user_rejected" | "not_confirmed" | "timeout" }
   | { status: "not_supported"; reason: string }

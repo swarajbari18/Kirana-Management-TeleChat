@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { verifyBindings } from "./binding-verifier.js";
 import {
-  buildInventoryFixtureRecords,
   buildUserProfileFactRecords,
 } from "../verified-facts/user-profile-fact-registry.js";
+import { buildInventoryFixtureRecords } from "../verified-facts/inventory-fact-registry.js";
 import type { GroundedResponse } from "../grounded-response/types.js";
 import type { OutcomeRecord } from "../verified-facts/types.js";
 
@@ -233,16 +233,16 @@ describe("verifyBindings INV catalog", () => {
   it("INV-01 Maggi quantity binding passes", () => {
     const registry = invRegistry();
     const maggi = registry.get(
-      "inventory_check_stock_read_inventory_MAG-001_quantity",
+      "inventory_check_stock_query_inventory_maggi-5-pack-001_quantityOnHand",
     )!;
     const response: GroundedResponse = {
       lines: [
         {
-          display: "Maggi packets in stock: 5",
+          display: "Maggi 5-pack packets in stock: 5",
           bindings: [
             {
               factId: maggi.factId,
-              field: "quantity",
+              field: "quantityOnHand",
               asShown: "5",
             },
           ],
@@ -255,13 +255,13 @@ describe("verifyBindings INV catalog", () => {
   it("INV-02 wrong SKU value_mismatch", () => {
     const registry = invRegistry();
     const atta = registry.get(
-      "inventory_check_stock_read_inventory_ATTA-001_quantity",
+      "inventory_check_stock_query_inventory_atta-1kg-001_quantityOnHand",
     )!;
     const response: GroundedResponse = {
       lines: [
         {
           display: "Maggi packets: 5",
-          bindings: [{ factId: atta.factId, field: "quantity", asShown: "5" }],
+          bindings: [{ factId: atta.factId, field: "quantityOnHand", asShown: "5" }],
         },
       ],
     };
@@ -273,14 +273,14 @@ describe("verifyBindings INV catalog", () => {
   it("INV-03 wrong asShown value_mismatch", () => {
     const registry = invRegistry();
     const maggi = registry.get(
-      "inventory_check_stock_read_inventory_MAG-001_quantity",
+      "inventory_check_stock_query_inventory_maggi-5-pack-001_quantityOnHand",
     )!;
     const response: GroundedResponse = {
       lines: [
         {
           display: "Maggi: 26",
           bindings: [
-            { factId: maggi.factId, field: "quantity", asShown: "26" },
+            { factId: maggi.factId, field: "quantityOnHand", asShown: "26" },
           ],
         },
       ],

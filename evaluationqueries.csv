@@ -1,0 +1,14 @@
+id,component,facet,test_type,query,prerequisite,target_layer,expected_outcome,should_fail,failure_point,follow_up,verify_in_db,notes
+C50-001,component_5.0,routing,walkthrough_w1,"Can you update my inventory?",any,global_orchestrator,W1 — inventory routing + query/update plan; no ask_user unless clarify,no,,,no shop_profile writes,Routes to inventory BC
+C50-002,component_5.0,routing,walkthrough_w2,"How much sugar is left?",any,global_orchestrator,W5 — query_inventory not-found + respond; no profile writes,no,,,no shop_profile changes,ONB-027 scenario
+C50-003,component_5.0,user_profile,regression,"What is my shop name?",shop_name set,user_profile,Grounded respond with shop name fact,no,,,answer cites user_profile fact,Regression read path
+C50-004,component_5.0,tax_registration,walkthrough_w4,"Yes I am GST registered",no GSTIN,user_profile,W4 — ask_user for GSTIN,no,,,shop_profile.gstin unchanged,ONB-016 style
+C50-005,component_5.0,meta,walkthrough_w5,"What are your current capabilities?",any,global_orchestrator,W5 — no invented system capabilities in response,no,,,,Trace A improved; full fix deferred
+C51-001,component_5.1,inventory,walkthrough_w5,"How much sugar is left?",empty inventory,inventory,W5 — exactMatchCount 0 completed not-found,no,,,no inventory writes,Standalone read
+C51-002,component_5.1,inventory,walkthrough_w1,"Register Maggi 5-pack 50 packets cost 10 sell 12 HSN 19023010 GST 12% packaged",empty inventory,inventory,W1 — query then register with confirmation,no,,,inventory_products + movement row,Create new SKU
+C51-003,component_5.1,inventory,read_after_create,"How much Maggi 5-pack is left?",after C51-002,inventory,Grounded quantity from query_inventory,no,,,quantity matches register,
+C51-004,component_5.1,inventory,walkthrough_w2,"50 more Maggi 5-pack came in",after C51-002,inventory,W2 — query exact 1 + update increase,no,,,quantity increased + movement,
+C51-005,component_5.1,inventory,walkthrough_w6,"what's running out?",seeded low stock,inventory,W6 — low_stock scan grounded facts,no,,,lists SKUs below reorder,
+C51-006,component_5.1,inventory,walkthrough_w7,"reduce Maggi 5-pack by 5",after C51-002,inventory,W7 — completed + refusalMessage; no DB change,no,,,quantity unchanged,
+C51-007,component_5.1,inventory,walkthrough_w3,"update stock for Magi 5-pak",after C51-002,inventory,W3 — clarification with similarCandidates,no,,,no writes,
+C51-008,component_5.1,inventory,walkthrough_w4,"how much atta?",two atta SKUs seeded,inventory,W4 — clarification ask_user with exact options,no,,,no quantity for wrong SKU,

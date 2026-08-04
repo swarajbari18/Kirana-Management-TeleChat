@@ -33,7 +33,10 @@ describe("capability blueprint STAT-01", () => {
       }),
       sortByDependencies: (steps) => steps,
       parameterGroundingCheck: () => ({ valid: true }),
-      executeTool: async () => ({}),
+      executeTool: async () => ({
+        verifiedFacts: {},
+        agentState: {},
+      }),
       mapToolError: (e) => ({
         status: "error",
         diagnostics: String(e),

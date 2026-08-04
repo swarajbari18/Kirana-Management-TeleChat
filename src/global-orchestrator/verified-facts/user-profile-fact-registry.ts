@@ -112,33 +112,3 @@ export function buildUserProfileFactRecords(
 
   return records;
 }
-
-/** Build inventory fixture records for pre-C5 unit tests (INV-*). */
-export function buildInventoryFixtureRecords(): VerifiedFactRecord[] {
-  return [
-    {
-      factId: "inventory_check_stock_read_inventory_MAG-001_quantity",
-      objectiveId: "check_stock",
-      capabilityId: "inventory",
-      toolName: "read_inventory",
-      jsonPath: "items[sku=MAG-001].quantity",
-      field: "quantity",
-      value: "5",
-      valueType: "number",
-      identity: { sku: "MAG-001", canonicalName: "Maggi" },
-      catalogLabel: "Maggi (MAG-001) quantity: 5",
-    },
-    {
-      factId: "inventory_check_stock_read_inventory_ATTA-001_quantity",
-      objectiveId: "check_stock",
-      capabilityId: "inventory",
-      toolName: "read_inventory",
-      jsonPath: "items[sku=ATTA-001].quantity",
-      field: "quantity",
-      value: "26",
-      valueType: "number",
-      identity: { sku: "ATTA-001", canonicalName: "Atta" },
-      catalogLabel: "Atta (ATTA-001) quantity: 26",
-    },
-  ];
-}

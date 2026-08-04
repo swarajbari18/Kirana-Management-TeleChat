@@ -108,3 +108,59 @@ export const shopProfileHistory = sqliteTable("shop_profile_history", {
   newValue: text("new_value"),
   appliedAt: text("applied_at").notNull(),
 });
+
+export const inventoryProducts = sqliteTable("inventory_products", {
+  sku: text("sku").primaryKey(),
+  productName: text("product_name").notNull(),
+  itemType: text("item_type").notNull(),
+  unit: text("unit").notNull(),
+  quantityOnHand: integer("quantity_on_hand").notNull(),
+  costPrice: integer("cost_price").notNull(),
+  sellPrice: integer("sell_price").notNull(),
+  hsnCode: text("hsn_code").notNull(),
+  gstRate: integer("gst_rate").notNull(),
+  reorderLevel: integer("reorder_level").notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const inventoryProductAliases = sqliteTable(
+  "inventory_product_aliases",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sku: text("sku")
+      .notNull()
+      .references(() => inventoryProducts.sku),
+    alias: text("alias").notNull(),
+  },
+);
+
+export const inventoryMovements = sqliteTable("inventory_movements", {
+  id: text("id").primaryKey(),
+  sku: text("sku")
+    .notNull()
+    .references(() => inventoryProducts.sku),
+  movementType: text("movement_type").notNull(),
+  quantityDelta: integer("quantity_delta").notNull(),
+  balanceBefore: integer("balance_before").notNull(),
+  balanceAfter: integer("balance_after").notNull(),
+  referenceType: text("reference_type"),
+  referenceId: text("reference_id"),
+  updateId: integer("update_id").notNull(),
+  correlationId: text("correlation_id").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const inventoryReservations = sqliteTable("inventory_reservations", {
+  id: text("id").primaryKey(),
+  sku: text("sku")
+    .notNull()
+    .references(() => inventoryProducts.sku),
+  quantity: integer("quantity").notNull(),
+  draftBillId: text("draft_bill_id").notNull(),
+  status: text("status").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  createdAt: text("created_at").notNull(),
+  resolvedAt: text("resolved_at"),
+});

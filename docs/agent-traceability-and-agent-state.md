@@ -295,7 +295,7 @@ Persisted in `agent_trace_events` at runtime:
 | Tool plan JSON | My Shop Profile | `TOOL_PLAN` (nested under `CAPABILITY_INVOKED`) |
 | Tool plan verification | MSP | `TOOL_PLAN_VERIFIED` / `TOOL_PLAN_VERIFICATION_FAILED` |
 | Parameter grounding | MSP | `PARAMETER_GROUNDING_FAILED` |
-| Per-tool execution | MSP tools | `TOOL_EXECUTED` |
+| Per-tool execution | BC tools | `TOOL_EXECUTED` (payload includes `agentState`: exactMatchCount, sku, refusalMessage, pre/post quantities) |
 | GO decision mode | GO | `DECISION` |
 | GO response / faithfulness | GO | `RESPONSE_GENERATED`, `FAITHFULNESS_*` |
 | Replan versions | GO | `planVersion` on payloads; append-only rows |
@@ -405,6 +405,18 @@ Component 4 is **not done** until:
 7. Optional: profile history; confirmation message in `conversation_turns`.
 
 Until then, **manual validation + partial SQL timeline + wrangler tail** is the correct operational model for Component 3.
+
+---
+
+## Component 5.1 — Inventory BC agent state
+
+Within one inventory BC invocation, the capability blueprint keeps an **L1 tool-result map** (`operationId` / `toolName` → structured tool output). Write tools (`register_inventory`, `update_inventory`, `allocate_inventory`) read the prior `query_inventory` result from this map — not from LLM prompt stuffing.
+
+`TOOL_EXECUTED` payloads include `agentState` with at least: `exactMatchCount`, `exactMatches`, `similarCandidates` (when present), `sku` used, `refusalMessage`, and pre/post quantities for writes.
+
+`completed` + `refusalMessage` (e.g. stock reduction refused) flows to Decision/Response context but **never** enters the Fact Catalog.
+
+Movement types: `receive` (register/update increase), `reserve` / `commit` / `release` (allocate buffer). Billing (5.2) is the only path that permanently decreases `quantity_on_hand`.
 
 ---
 

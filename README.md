@@ -71,6 +71,24 @@ Unit tests cover pure deterministic logic (parsers, normalizer, handler). Coloca
 | Generic error | `We're facing some problems right now. Please try again later.` |
 | Stub greeting | `hi MF it's good to see you` |
 
+## Component 5.1 — Inventory evaluation
+
+Component 5.1 replaces the inventory unavailable stub with four tools: `query_inventory`, `register_inventory`, `update_inventory`, `allocate_inventory`.
+
+- **Exact-first search** — fuzzy/similar candidates appear only in clarification options, never as write identity.
+- **SKU for writes** comes from prior `query_inventory` exact match in L1 agent state (blueprint tool-result map), not from LLM-invented `sku`.
+- **Stock decreases** are refused on register/update (`completed` + `refusalMessage`); permanent decreases are Billing (5.2).
+- **Allocate** manages reservation buffer only; `quantity_on_hand` unchanged on reserve.
+- **Movement ledger** — every stock increase writes an `inventory_movements` row in the same transaction.
+
+### Eval
+
+1. `wrangler deploy`
+2. `npm run eval` (posts `evaluationqueries.csv` via webhook → DO)
+3. Export traces; audit with `sql/agent-trace.sql` per `update_id`
+
+C51 rows cover register (W1), update (W2), not-found read (W5), low stock (W6), refusal (W7), clarify (W3/W4), allocate (W10).
+
 ## Component 5.0 evaluation
 
 The 5.0 eval spine uses the **deployed Worker webhook → Store Durable Object** path (same as production). Traces in `agent_trace_events` are the evidence — not HTTP 200, not manual Telegram chat reading.

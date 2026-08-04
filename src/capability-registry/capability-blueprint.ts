@@ -22,12 +22,30 @@ export interface ParameterGroundingResult {
   userMessage?: string;
 }
 
+export interface AgentStatePriorResults {
+  byOperationId: Map<string, Record<string, unknown>>;
+  byToolName: Map<string, Record<string, unknown>>;
+}
+
+export interface ToolExecutionPlanContext {
+  orderedOperations: StructuredToolPlan["operations"];
+  currentOperationId: string;
+}
+
+export interface ToolStepResult {
+  verifiedFacts: Record<string, unknown>;
+  agentState: Record<string, unknown>;
+  refusalMessage?: string;
+}
+
 export type ToolExecutor = (
   step: StructuredToolPlan["operations"][number],
   ctx: OrchestrationContext,
   runtimePorts: RuntimePorts,
   db: StoreDatabase,
-) => Promise<Record<string, unknown>>;
+  priorResults: AgentStatePriorResults,
+  planContext: ToolExecutionPlanContext,
+) => Promise<ToolStepResult>;
 
 export interface CapabilityBlueprintConfig {
   id: string;
@@ -102,7 +120,7 @@ export function createCapabilityExecutor(
   ): Promise<CapabilityResult> {
     try {
       const priorPlan = runContext?.getBcPriorPlan(objective.objectiveId);
-      const priorResults = runContext?.getBcPriorResults(objective.objectiveId);
+      const priorBcResults = runContext?.getBcPriorResults(objective.objectiveId);
 
       let plan: StructuredToolPlan | null = null;
       let verification: ToolPlanVerificationResult = { valid: false };
@@ -115,7 +133,7 @@ export function createCapabilityExecutor(
           ctx,
           objective,
           priorPlan,
-          priorResults,
+          priorBcResults,
           lastDiagnostic,
         );
 
@@ -195,6 +213,10 @@ export function createCapabilityExecutor(
 
       const ordered = config.sortByDependencies(plan.operations);
       const facts: Record<string, unknown> = {};
+      const l1ToolResults: AgentStatePriorResults = {
+        byOperationId: new Map(),
+        byToolName: new Map(),
+      };
 
       for (const step of ordered) {
         let groundingAttempt = 0;
@@ -293,13 +315,21 @@ export function createCapabilityExecutor(
           };
         }
 
-        const result = await config.executeTool(
+        const toolResult = await config.executeTool(
           step,
           ctx,
           runtimePorts,
           db,
+          l1ToolResults,
+          {
+            orderedOperations: ordered,
+            currentOperationId: step.operationId,
+          },
         );
-        Object.assign(facts, result);
+
+        l1ToolResults.byOperationId.set(step.operationId, toolResult.agentState);
+        l1ToolResults.byToolName.set(step.toolName, toolResult.agentState);
+        Object.assign(facts, toolResult.verifiedFacts);
 
         if (runContext) {
           await runContext.appendTrace(
@@ -309,10 +339,24 @@ export function createCapabilityExecutor(
             {
               toolName: step.toolName,
               parameters: step.parameters,
-              resultSummary: Object.keys(result),
+              agentState: toolResult.agentState,
+              verifiedFactKeys: Object.keys(toolResult.verifiedFacts),
+              refusalMessage: toolResult.refusalMessage,
             },
             parentEventId,
           );
+        }
+
+        if (toolResult.refusalMessage) {
+          const refusalResult: CapabilityResult = {
+            status: "completed",
+            verifiedFacts: facts,
+            refusalMessage: toolResult.refusalMessage,
+          };
+          if (runContext) {
+            runContext.storeBcInvocation(objective.objectiveId, plan, refusalResult);
+          }
+          return refusalResult;
         }
       }
 

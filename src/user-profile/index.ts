@@ -58,33 +58,46 @@ async function executeTool(
   ctx: OrchestrationContext,
   runtimePorts: RuntimePorts,
   db: StoreDatabase,
-): Promise<Record<string, unknown>> {
+  _priorResults: import("../capability-registry/capability-blueprint.js").AgentStatePriorResults,
+  _planContext: import("../capability-registry/capability-blueprint.js").ToolExecutionPlanContext,
+): Promise<import("../capability-registry/capability-blueprint.js").ToolStepResult> {
+  const wrap = (verifiedFacts: Record<string, unknown>) => ({
+    verifiedFacts,
+    agentState: verifiedFacts,
+  });
+
   switch (step.toolName) {
     case "read_shop_profile":
-      return readShopProfile(db);
+      return wrap(await readShopProfile(db));
     case "propose_shop_identity_update":
-      return proposeShopIdentityUpdate(db, runtimePorts, {
-        shopName: step.parameters.shopName as string | undefined,
-        ownerName: step.parameters.ownerName as string | undefined,
-        chatId: ctx.chatId,
-        updateId: ctx.updateId,
-        correlationId: ctx.correlationId,
-      });
+      return wrap(
+        await proposeShopIdentityUpdate(db, runtimePorts, {
+          shopName: step.parameters.shopName as string | undefined,
+          ownerName: step.parameters.ownerName as string | undefined,
+          chatId: ctx.chatId,
+          updateId: ctx.updateId,
+          correlationId: ctx.correlationId,
+        }),
+      );
     case "propose_tax_registration_update":
-      return proposeTaxRegistrationUpdate(db, runtimePorts, {
-        gstRegistered: step.parameters.gstRegistered as boolean,
-        gstin: step.parameters.gstin as string | undefined,
-        chatId: ctx.chatId,
-        updateId: ctx.updateId,
-        correlationId: ctx.correlationId,
-      });
+      return wrap(
+        await proposeTaxRegistrationUpdate(db, runtimePorts, {
+          gstRegistered: step.parameters.gstRegistered as boolean,
+          gstin: step.parameters.gstin as string | undefined,
+          chatId: ctx.chatId,
+          updateId: ctx.updateId,
+          correlationId: ctx.correlationId,
+        }),
+      );
     case "update_instruction_preference":
-      return updateInstructionPreference(db, {
-        instruction: step.parameters.instruction as string,
-        mode: step.parameters.mode as "append" | "replace" | undefined,
-        updateId: ctx.updateId,
-        correlationId: ctx.correlationId,
-      });
+      return wrap(
+        await updateInstructionPreference(db, {
+          instruction: step.parameters.instruction as string,
+          mode: step.parameters.mode as "append" | "replace" | undefined,
+          updateId: ctx.updateId,
+          correlationId: ctx.correlationId,
+        }),
+      );
     default:
       throw new Error(`Unknown tool: ${step.toolName}`);
   }

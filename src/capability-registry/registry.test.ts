@@ -32,11 +32,13 @@ describe("capability registry REG-01", () => {
     const text = getCapabilityContextForDecision();
     expect(text).toContain("user_profile tools:");
     expect(text).toContain("read_shop_profile");
+    expect(text).toContain("inventory tools:");
+    expect(text).toContain("query_inventory");
   });
 });
 
 describe("capability registry REG-02", () => {
-  const stubIds = ["inventory", "billing", "khata", "analytics"] as const;
+  const stubIds = ["billing", "khata", "analytics"] as const;
 
   for (const id of stubIds) {
     it(`${id} stub returns unavailable`, async () => {
@@ -54,4 +56,34 @@ describe("capability registry REG-02", () => {
       });
     });
   }
+
+  it("inventory is implemented (not unavailable stub)", async () => {
+    const result = await invokeCapability(
+      "inventory",
+      { objectiveId: "o1", description: "test" },
+      {
+        geminiApiKey: "fake",
+        inbound: { kind: "text", text: "test" },
+        ownerProfile: {
+          shopName: null,
+          ownerName: null,
+          gstRegistered: null,
+          gstin: null,
+          instructions: [],
+          confirmationTimeoutMs: 300_000,
+          completeAutonomy: false,
+        },
+        storeId: "s1",
+        correlationId: "c1",
+        updateId: 1,
+        chatId: 1,
+        activeSessionId: "sess",
+        turns: [],
+        storeInitialized: true,
+      },
+      {} as never,
+      {} as never,
+    );
+    expect(result.status).not.toBe("unavailable");
+  });
 });
