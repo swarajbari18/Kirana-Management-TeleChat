@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createRunContext } from "./run-context.js";
 import type { ExecutionPhaseResult } from "../../global-orchestrator/execution-engine/types.js";
+import type { CapabilityResult } from "../../capability-registry/types.js";
 
 const baseCtx = {
   storeId: "store-1",
@@ -98,5 +99,161 @@ describe("run-context CTX-02", () => {
     expect(slice).toContain('"action": "respond"');
     expect(slice).toContain("Execution summary:");
     expect(slice).toContain("inventory");
+  });
+});
+
+describe("run-context BC re-invoke context", () => {
+  it("preserves tool plan in bcInvocationState (Fix 1)", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    const toolPlan = { operations: [{ operationId: "op1", toolName: "query_inventory" }] };
+    const result: CapabilityResult = {
+      status: "completed",
+      verifiedFacts: { sku: "maggi-001" },
+    };
+
+    runContext.storeBcInvocation("o1", toolPlan, result, {
+      capabilityId: "inventory",
+      objectiveDescription: "find Maggi SKU",
+    });
+
+    expect(runContext.getBcPriorPlan("o1")).toEqual(toolPlan);
+    expect(runContext.getBcPriorResults("o1")).toEqual(result);
+    expect(runContext.bcInvocationLog).toHaveLength(1);
+  });
+
+  it("buildBcStrategicReinvokeContext returns prior round for same capability", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    const priorPlan = { operations: [{ operationId: "op1", toolName: "query_inventory" }] };
+    const priorResult: CapabilityResult = {
+      status: "clarification_needed",
+      reason: "ambiguous",
+      requiredInfo: "Which atta?",
+    };
+
+    runContext.storeBcInvocation("o1", priorPlan, priorResult, {
+      capabilityId: "inventory",
+      objectiveDescription: "query atta stock",
+    });
+
+    runContext.recordReplanVersion(
+      {
+        businessIntent: "sell atta",
+        objectives: [
+          {
+            objectiveId: "o1",
+            objectiveDescription: "query atta stock",
+            capabilityId: "inventory",
+            dependencies: [],
+          },
+        ],
+      },
+      { objectives: { o1: { status: "clarification_needed", result: priorResult } } },
+    );
+
+    const strategic = runContext.buildBcStrategicReinvokeContext("inventory");
+    expect(strategic).toBeDefined();
+    expect(strategic?.priorObjectiveDescription).toBe("query atta stock");
+    expect(strategic?.priorToolPlan).toEqual(priorPlan);
+    expect(strategic?.priorResults).toEqual(priorResult);
+    expect(strategic?.priorPlanVersion).toBe(1);
+  });
+
+  it("buildBcStrategicReinvokeContext is undefined on first plan version", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    runContext.storeBcInvocation(
+      "o1",
+      { operations: [] },
+      { status: "completed", verifiedFacts: {} },
+      {
+        capabilityId: "inventory",
+        objectiveDescription: "query sugar",
+      },
+    );
+
+    expect(runContext.buildBcStrategicReinvokeContext("inventory")).toBeUndefined();
+  });
+
+  it("does not inject same-plan prior inventory into second inventory objective", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    runContext.storeBcInvocation(
+      "query",
+      { operations: [{ operationId: "q1", toolName: "query_inventory" }] },
+      { status: "completed", verifiedFacts: { sku: "maggi-001" } },
+      {
+        capabilityId: "inventory",
+        objectiveDescription: "find Maggi",
+      },
+    );
+
+    const slices = runContext.buildBcPlanningPriorSlices("inventory", "commit");
+    expect(slices).toEqual([]);
+  });
+
+  it("buildBcPlanningPriorSlices serializes strategic replan block before new objective", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    runContext.storeBcInvocation(
+      "o1",
+      { operations: [{ operationId: "q1", toolName: "query_inventory" }] },
+      { status: "completed", verifiedFacts: { sku: "maggi-001" } },
+      {
+        capabilityId: "inventory",
+        objectiveDescription: "find Maggi SKU",
+      },
+    );
+    runContext.recordReplanVersion(
+      {
+        businessIntent: "sell",
+        objectives: [
+          {
+            objectiveId: "o1",
+            objectiveDescription: "find Maggi SKU",
+            capabilityId: "inventory",
+            dependencies: [],
+          },
+        ],
+      },
+      {
+        objectives: {
+          o1: {
+            status: "completed",
+            result: { status: "completed", verifiedFacts: { sku: "maggi-001" } },
+          },
+        },
+      },
+    );
+
+    const slices = runContext.buildBcPlanningPriorSlices("inventory", "o2");
+    expect(slices).toHaveLength(1);
+    expect(slices[0]).toContain("Prior invocation (same capability, strategic replan)");
+    expect(slices[0]).toContain("Prior objective: find Maggi SKU");
+    expect(slices[0]).toContain("query_inventory");
+  });
+
+  it("planningContextSlice strategic_replan includes prior plan JSON from replanHistory (Fix 4)", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    const priorPlan = {
+      businessIntent: "sell Maggi",
+      objectives: [
+        {
+          objectiveId: "bill",
+          objectiveDescription: "finalize bill",
+          capabilityId: "billing",
+          dependencies: [],
+        },
+      ],
+    };
+
+    runContext.recordReplanVersion(
+      priorPlan,
+      { objectives: { bill: { status: "completed", result: { status: "completed", verifiedFacts: { bill_id: "b1" } } } } },
+      { action: "replan", rationale: "missing inventory commit" },
+    );
+
+    const slice = runContext.planningContextSlice("strategic_replan");
+    expect(slice).toContain("Replan v1 plan:");
+    expect(slice).toContain('"objectiveId": "bill"');
+    expect(slice).toContain("Replan v1 results:");
+    expect(slice).toContain("Replan v1 decision:");
+    expect(slice).toContain("missing inventory commit");
   });
 });

@@ -36,8 +36,8 @@ const baseCtx = {
 function mockRunContext() {
   return {
     appendTrace: vi.fn(async () => "evt-1"),
-    storeBcInvocation: vi.fn(),
     getPreservedObjectiveResult: vi.fn(() => undefined),
+    planVersion: 1,
   };
 }
 

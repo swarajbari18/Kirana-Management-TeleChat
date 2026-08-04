@@ -58,8 +58,7 @@ async function planTools(
   ctx: OrchestrationContext,
   objective: BusinessObjective,
   db: StoreDatabase,
-  priorPlan?: unknown,
-  priorResults?: CapabilityResult,
+  runContext: RunContext | undefined,
   harnessDiagnostic?: string,
 ): Promise<
   import("../global-orchestrator/gemini-client.js").GeminiInvocationResult<
@@ -68,6 +67,8 @@ async function planTools(
 > {
   const openDrafts = await buildOpenDraftSummaries(db);
   const parts: string[] = [
+    ...(runContext?.buildBcPlanningPriorSlices(config.id, objective.objectiveId) ??
+      []),
     `Objective: ${objective.description}`,
     `User message: ${ctx.inbound.text}`,
     `Profile: ${JSON.stringify(ctx.ownerProfile)}`,
@@ -78,12 +79,9 @@ async function planTools(
     parts.push(`GO draft intent: ${objective.draftTarget}`);
   }
 
-  if (priorPlan) {
-    parts.push(`Prior tool plan:\n${JSON.stringify(priorPlan, null, 2)}`);
-  }
-  if (priorResults) {
+  if (objective.priorObjectiveResults) {
     parts.push(
-      `Prior execution results:\n${JSON.stringify(priorResults, null, 2)}`,
+      `Dependency verified facts:\n${JSON.stringify(objective.priorObjectiveResults, null, 2)}`,
     );
   }
   if (harnessDiagnostic) {
@@ -248,9 +246,6 @@ export function createBillingExecutor(
     parentEventId?: string,
   ): Promise<CapabilityResult> {
     try {
-      const priorPlan = runContext?.getBcPriorPlan(objective.objectiveId);
-      const priorBcResults = runContext?.getBcPriorResults(objective.objectiveId);
-
       let plan: StructuredToolPlan | null = null;
       let verification: ToolPlanVerificationResult = { valid: false };
       let harnessAttempt = 0;
@@ -262,8 +257,7 @@ export function createBillingExecutor(
           ctx,
           objective,
           db,
-          priorPlan,
-          priorBcResults,
+          runContext,
           lastDiagnostic,
         );
 
@@ -379,8 +373,7 @@ export function createBillingExecutor(
             ctx,
             objective,
             db,
-            plan,
-            undefined,
+            runContext,
             grounding.diagnostic,
           );
 
@@ -522,7 +515,15 @@ export function createBillingExecutor(
             attachments: attachments.length > 0 ? attachments : undefined,
           };
           if (runContext) {
-            runContext.storeBcInvocation(objective.objectiveId, plan, refusalResult);
+            runContext.storeBcInvocation(
+              objective.objectiveId,
+              plan,
+              refusalResult,
+              {
+                capabilityId: config.id,
+                objectiveDescription: objective.description,
+              },
+            );
           }
           return refusalResult;
         }
@@ -535,7 +536,15 @@ export function createBillingExecutor(
       };
 
       if (runContext) {
-        runContext.storeBcInvocation(objective.objectiveId, plan, completedResult);
+        runContext.storeBcInvocation(
+          objective.objectiveId,
+          plan,
+          completedResult,
+          {
+            capabilityId: config.id,
+            objectiveDescription: objective.description,
+          },
+        );
       }
 
       return completedResult;

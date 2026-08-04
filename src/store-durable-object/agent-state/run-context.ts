@@ -96,6 +96,23 @@ export interface BcInvocationState {
   priorResults?: CapabilityResult;
 }
 
+export interface BcInvocationLogEntry {
+  planVersion: number;
+  objectiveId: string;
+  capabilityId: string;
+  objectiveDescription: string;
+  toolPlan: unknown;
+  result: CapabilityResult;
+}
+
+export interface BcStrategicReinvokeContext {
+  priorObjectiveId: string;
+  priorPlanVersion: number;
+  priorObjectiveDescription: string;
+  priorToolPlan: unknown;
+  priorResults: CapabilityResult;
+}
+
 function stripNewCommandPrefix(text: string): string {
   return text.replace(/^\/new\s*/i, "").trim();
 }
@@ -115,6 +132,7 @@ export class RunContext {
   >();
   replanHistory: ReplanHistoryEntry[] = [];
   bcInvocationState = new Map<string, BcInvocationState>();
+  bcInvocationLog: BcInvocationLogEntry[] = [];
   verifiedFactRegistry = new Map<string, VerifiedFactRecord>();
   outcomeRegistry = new Map<string, OutcomeRecord>();
   priorDecisions: DecisionResult[] = [];
@@ -202,15 +220,18 @@ export class RunContext {
     }
 
     if (mode === "strategic_replan") {
-      if (this.currentPlan) {
-        parts.push(
-          `Prior capability plan:\n${JSON.stringify(this.currentPlan, null, 2)}`,
-        );
-      }
       for (const entry of this.replanHistory) {
+        parts.push(
+          `Replan v${entry.planVersion} plan:\n${JSON.stringify(entry.plan, null, 2)}`,
+        );
         parts.push(
           `Replan v${entry.planVersion} results:\n${JSON.stringify(entry.phaseResult, null, 2)}`,
         );
+        if (entry.decision) {
+          parts.push(
+            `Replan v${entry.planVersion} decision:\n${JSON.stringify(entry.decision, null, 2)}`,
+          );
+        }
       }
       const lastDecision = this.priorDecisions.at(-1);
       if (lastDecision) {
@@ -395,11 +416,77 @@ export class RunContext {
     objectiveId: string,
     toolPlan: unknown,
     result: CapabilityResult,
+    meta?: { capabilityId: string; objectiveDescription: string },
   ): void {
     this.bcInvocationState.set(objectiveId, {
       priorToolPlan: toolPlan,
       priorResults: result,
     });
+    if (meta && toolPlan != null) {
+      this.bcInvocationLog.push({
+        planVersion: this.planVersion,
+        objectiveId,
+        capabilityId: meta.capabilityId,
+        objectiveDescription: meta.objectiveDescription,
+        toolPlan,
+        result,
+      });
+    }
+  }
+
+  buildBcStrategicReinvokeContext(
+    capabilityId: string,
+  ): BcStrategicReinvokeContext | undefined {
+    if (this.planVersion <= 1) {
+      return undefined;
+    }
+    for (let i = this.bcInvocationLog.length - 1; i >= 0; i--) {
+      const entry = this.bcInvocationLog[i]!;
+      if (entry.planVersion >= this.planVersion) {
+        continue;
+      }
+      if (entry.capabilityId !== capabilityId) {
+        continue;
+      }
+      return {
+        priorObjectiveId: entry.objectiveId,
+        priorPlanVersion: entry.planVersion,
+        priorObjectiveDescription: entry.objectiveDescription,
+        priorToolPlan: entry.toolPlan,
+        priorResults: entry.result,
+      };
+    }
+    return undefined;
+  }
+
+  buildBcPlanningPriorSlices(
+    capabilityId: string,
+    objectiveId: string,
+  ): string[] {
+    const strategic = this.buildBcStrategicReinvokeContext(capabilityId);
+    if (strategic) {
+      return [
+        [
+          "Prior invocation (same capability, strategic replan):",
+          `Prior objective: ${strategic.priorObjectiveDescription}`,
+          `Prior tool plan:\n${JSON.stringify(strategic.priorToolPlan, null, 2)}`,
+          `Prior execution results:\n${JSON.stringify(strategic.priorResults, null, 2)}`,
+        ].join("\n"),
+      ];
+    }
+
+    const slices: string[] = [];
+    const priorPlan = this.getBcPriorPlan(objectiveId);
+    const priorResults = this.getBcPriorResults(objectiveId);
+    if (priorPlan) {
+      slices.push(`Prior tool plan:\n${JSON.stringify(priorPlan, null, 2)}`);
+    }
+    if (priorResults) {
+      slices.push(
+        `Prior execution results:\n${JSON.stringify(priorResults, null, 2)}`,
+      );
+    }
+    return slices;
   }
 
   async appendTrace(
