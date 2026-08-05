@@ -4,7 +4,10 @@
 |                    |                                              |
 | ------------------ | -------------------------------------------- |
 | **Bot**            | `@kirana_tele_bot`           |
-| **Demo recording** | *https://www.loom.com/share/826609c6a2094e0db1d0694c552c3a5a*              |
+| **Demo — Part 1**  | *https://www.loom.com/share/95c89789a2eb448ab17f6fbbb348359e*              |
+| **Demo — Part 2**  | *https://www.loom.com/share/b94c26b8270d410b921f55099a389625*              |
+| **Demo — Part 3**  | *https://www.loom.com/share/f53c5e69a4a64a569228b75a8c28f3a8*              |
+| **Why three parts?** | *I had to split this in three parts to show the working of the telegram kirana chat properly and manage the loom video time limit* |
 
 
 ---
