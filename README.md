@@ -3,7 +3,7 @@
 
 |                    |                                              |
 | ------------------ | -------------------------------------------- |
-| **Bot**            | `@username` *(fill after deploy)*            |
+| **Bot**            | `@kirana_tele_bot`           |
 | **Demo recording** | *https://www.loom.com/share/826609c6a2094e0db1d0694c552c3a5a*              |
 
 
