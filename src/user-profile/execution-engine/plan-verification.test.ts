@@ -17,6 +17,22 @@ describe("verifyToolPlan", () => {
     expect(result.valid).toBe(false);
   });
 
+  it("rejects unknown parameter on read_shop_profile", () => {
+    const result = verifyToolPlan({
+      operations: [
+        {
+          operationId: "op1",
+          operationDescription: "read",
+          toolName: "read_shop_profile",
+          parameters: { extra: true },
+          dependencies: [],
+        },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain("unknown parameter");
+  });
+
   it("rejects incomplete GST facet", () => {
     const result = verifyToolPlan({
       operations: [

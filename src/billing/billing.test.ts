@@ -138,6 +138,28 @@ describe("BILL-AVAIL-01", () => {
   });
 });
 
+describe("BILL-PARAM-01", () => {
+  it("rejects unknown parameter on manage_draft_bill add_item", () => {
+    const result = verifyToolPlan({
+      operations: [
+        {
+          operationId: "d1",
+          operationDescription: "add",
+          toolName: "manage_draft_bill",
+          parameters: {
+            operation: "add_item",
+            product_name: "Maggi",
+            qty: 2,
+          },
+          dependencies: [],
+        },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain("qty");
+  });
+});
+
 describe("BILL-RESOLVE-03", () => {
   it("plan verification accepts draft_target enum", () => {
     const result = verifyToolPlan({

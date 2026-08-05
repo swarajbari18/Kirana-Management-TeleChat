@@ -45,6 +45,8 @@ Typical complete plans:
 
 Output JSON: { "operations": [{ operationId, operationDescription, toolName, parameters, dependencies }] }
 
+Parameter names are enforced by code — use exact snake_case names from the tool list above; unknown keys fail verification.
+
 Prior tool work in this run may already be in agent state. Use that as evidence, but still output a complete plan for the current objective unless verification accepts a write-only plan backed by prior agent state.
 
 Output valid JSON only.`;

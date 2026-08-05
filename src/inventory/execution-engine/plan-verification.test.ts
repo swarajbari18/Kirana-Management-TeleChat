@@ -144,6 +144,63 @@ describe("inventory plan verification INV-PLAN-03", () => {
   });
 });
 
+describe("inventory plan verification INV-PLAN-04", () => {
+  it("rejects quantity_delta on update_inventory", () => {
+    const result = verifyToolPlan({
+      operations: [
+        {
+          operationId: "q1",
+          operationDescription: "query",
+          toolName: "query_inventory",
+          parameters: { product_name: "Maggi 70g" },
+          dependencies: [],
+        },
+        {
+          operationId: "u1",
+          operationDescription: "update",
+          toolName: "update_inventory",
+          parameters: {
+            product_name: "Maggi 70g",
+            quantity_delta: 50,
+            cost_price: 12,
+            sell_price: 14,
+          },
+          dependencies: ["q1"],
+        },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain("quantity_delta");
+  });
+
+  it("accepts quantity on update_inventory with query dependency", () => {
+    const result = verifyToolPlan({
+      operations: [
+        {
+          operationId: "q1",
+          operationDescription: "query",
+          toolName: "query_inventory",
+          parameters: { product_name: "Maggi 70g" },
+          dependencies: [],
+        },
+        {
+          operationId: "u1",
+          operationDescription: "update",
+          toolName: "update_inventory",
+          parameters: {
+            product_name: "Maggi 70g",
+            quantity: 50,
+            cost_price: 12,
+            sell_price: 14,
+          },
+          dependencies: ["q1"],
+        },
+      ],
+    });
+    expect(result.valid).toBe(true);
+  });
+});
+
 describe("inventory plan verification INV-PLAN-02", () => {
   it("rejects low_stock combined with product_name", () => {
     const result = verifyToolPlan({

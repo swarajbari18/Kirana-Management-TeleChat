@@ -30,6 +30,8 @@ Available tools (reference — code enforces):
 
 Output JSON: { "operations": [{ operationId, operationDescription, toolName, parameters, dependencies }] }
 
+Parameter names are enforced by code — use exact names from the tool list above; unknown keys fail verification.
+
 Prior tool work in this run may already be in agent state. Use that as evidence, but still output a complete plan for the current objective.
 
 On re-invoke, use prior tool plan and prior results in context to revise — what was attempted and what happened.

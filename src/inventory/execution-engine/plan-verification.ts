@@ -3,6 +3,7 @@ import type {
   PriorBcQueryState,
   ToolPlanVerifyContext,
 } from "../../capability-registry/tool-plan-verify-context.js";
+import { validateCapabilityToolParameters } from "../../capability-registry/tool-parameter-contracts/index.js";
 
 export interface ToolPlanVerificationResult {
   valid: boolean;
@@ -132,6 +133,11 @@ export function verifyToolPlan(
   const operationIds = new Set<string>();
 
   for (const op of plan.operations) {
+    const paramResult = validateCapabilityToolParameters("inventory", op);
+    if (!paramResult.valid) {
+      return paramResult;
+    }
+
     if (!KNOWN_TOOLS.has(op.toolName)) {
       diagnostics.push(`Unknown tool: ${op.toolName}`);
       return { valid: false, reason: diagnostics[0], diagnostics };
@@ -208,16 +214,6 @@ export function verifyToolPlan(
         diagnostics.push(
           "query_inventory is a required dependency of update_inventory",
         );
-        return { valid: false, reason: diagnostics[0], diagnostics };
-      }
-      const hasUpdateField =
-        op.parameters.quantity !== undefined ||
-        op.parameters.cost_price !== undefined ||
-        op.parameters.sell_price !== undefined ||
-        op.parameters.reorder_level !== undefined ||
-        typeof op.parameters.product_name === "string";
-      if (!hasUpdateField) {
-        diagnostics.push("update_inventory requires at least one field to update");
         return { valid: false, reason: diagnostics[0], diagnostics };
       }
     }

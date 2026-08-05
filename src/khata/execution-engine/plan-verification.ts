@@ -3,6 +3,7 @@ import type {
   PriorBcQueryState,
   ToolPlanVerifyContext,
 } from "../../capability-registry/tool-plan-verify-context.js";
+import { validateCapabilityToolParameters } from "../../capability-registry/tool-parameter-contracts/index.js";
 
 export interface ToolPlanVerificationResult {
   valid: boolean;
@@ -199,6 +200,11 @@ export function verifyToolPlan(
   const operationIds = new Set<string>();
 
   for (const op of plan.operations) {
+    const paramResult = validateCapabilityToolParameters("khata", op);
+    if (!paramResult.valid) {
+      return paramResult;
+    }
+
     if (!KNOWN_TOOLS.has(op.toolName)) {
       diagnostics.push(`Unknown tool: ${op.toolName}`);
       return { valid: false, reason: diagnostics[0], diagnostics };

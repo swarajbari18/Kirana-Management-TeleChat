@@ -1,4 +1,5 @@
 import type { StructuredToolPlan, ToolPlanStep } from "../../capability-registry/types.js";
+import { validateCapabilityToolParameters } from "../../capability-registry/tool-parameter-contracts/index.js";
 
 export interface ToolPlanVerificationResult {
   valid: boolean;
@@ -75,6 +76,11 @@ export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationRe
   const operationIds = new Set<string>();
 
   for (const op of plan.operations) {
+    const paramResult = validateCapabilityToolParameters("billing", op);
+    if (!paramResult.valid) {
+      return paramResult;
+    }
+
     if (!KNOWN_TOOLS.has(op.toolName)) {
       diagnostics.push(`Unknown tool: ${op.toolName}`);
       return { valid: false, reason: diagnostics[0], diagnostics };

@@ -34,7 +34,6 @@ describe("KHATA-PLAN-01", () => {
           parameters: {
             operation: "create_customer",
             customer_name: "Ramesh",
-            phone_number: "8273562398",
           },
           dependencies: [],
         },
@@ -79,7 +78,6 @@ describe("KHATA-PLAN-01", () => {
           parameters: {
             operation: "create_customer",
             customer_name: "Ramesh",
-            phone_number: "8273562398",
           },
           dependencies: ["q1"],
         },
@@ -185,6 +183,35 @@ describe("KHATA-GROUND-01", () => {
       dependencies: [],
     });
     expect(fail.valid).toBe(false);
+  });
+});
+
+describe("KHATA-PARAM-01", () => {
+  it("rejects unknown amount_rupees on record_payment", () => {
+    const result = verifyToolPlan({
+      operations: [
+        {
+          operationId: "q1",
+          operationDescription: "query",
+          toolName: "query_khata",
+          parameters: { customer_name: "Ramesh" },
+          dependencies: [],
+        },
+        {
+          operationId: "m1",
+          operationDescription: "pay",
+          toolName: "manage_khata_transaction",
+          parameters: {
+            operation: "record_payment",
+            customer_name: "Ramesh",
+            amount_rupees: 300,
+          },
+          dependencies: ["q1"],
+        },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain("amount_rupees");
   });
 });
 
