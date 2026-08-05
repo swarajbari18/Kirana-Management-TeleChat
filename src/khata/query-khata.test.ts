@@ -44,7 +44,13 @@ function planContext(
   currentOperationId: string,
 ): ToolExecutionPlanContext {
   return {
-    orderedOperations: ordered,
+    orderedOperations: ordered.map((op) => ({
+      operationId: op.operationId,
+      operationDescription: op.toolName,
+      toolName: op.toolName,
+      parameters: op.parameters ?? {},
+      dependencies: [],
+    })),
     currentOperationId,
   };
 }
