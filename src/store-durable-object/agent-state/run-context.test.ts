@@ -304,3 +304,106 @@ describe("run-context BC re-invoke context", () => {
     expect(slice).toContain('"product_name": "Maggi"');
   });
 });
+
+describe("run-context artifact delivery", () => {
+  it("decisionContextSlice never includes artifact bytes", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    runContext.currentPlan = {
+      businessIntent: "finalize bill",
+      objectives: [
+        {
+          objectiveId: "o1",
+          objectiveDescription: "finalize",
+          capabilityId: "billing",
+          dependencies: [],
+        },
+      ],
+    };
+
+    const pdfBytes = new Uint8Array(50_000).fill(0x41);
+    const phaseResult: ExecutionPhaseResult = {
+      objectives: {
+        o1: {
+          status: "completed",
+          result: {
+            status: "completed",
+            verifiedFacts: { invoice_attached: true },
+            attachments: [
+              {
+                filename: "invoice.pdf",
+                mimeType: "application/pdf",
+                byteLength: pdfBytes.byteLength,
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const slice = runContext.decisionContextSlice(phaseResult);
+    expect(slice).toContain("byteLength");
+    expect(slice).toContain("invoice.pdf");
+    expect(slice.length).toBeLessThan(10_000);
+    expect(slice).not.toMatch(/A{100}/);
+  });
+
+  it("storeBcInvocation strips bytes from bcInvocationLog", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+    runContext.storeBcInvocation(
+      "o1",
+      { operations: [] },
+      {
+        status: "completed",
+        verifiedFacts: { invoice_attached: true },
+        attachments: [
+          {
+            filename: "invoice.pdf",
+            mimeType: "application/pdf",
+            bytes: pdfBytes,
+          },
+        ],
+      } as unknown as CapabilityResult,
+      {
+        capabilityId: "billing",
+        objectiveDescription: "finalize",
+      },
+    );
+
+    const logged = runContext.bcInvocationLog[0]?.result;
+    if (!logged || logged.status !== "completed") {
+      throw new Error("expected completed log");
+    }
+    expect(logged.attachments?.[0]).toEqual({
+      filename: "invoice.pdf",
+      mimeType: "application/pdf",
+      byteLength: 4,
+    });
+    expect(JSON.stringify(runContext.bcInvocationLog)).not.toContain("JVBER");
+  });
+
+  it("stageDeliveryAttachments buffers bytes for Telegram delivery", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    const pdfBytes = new Uint8Array([1, 2, 3]);
+    const refs = runContext.stageDeliveryAttachments([
+      {
+        filename: "invoice.pdf",
+        mimeType: "application/pdf",
+        bytes: pdfBytes,
+      },
+    ]);
+
+    expect(refs).toEqual([
+      {
+        filename: "invoice.pdf",
+        mimeType: "application/pdf",
+        byteLength: 3,
+      },
+    ]);
+
+    const pending = runContext.takePendingDeliveryAttachments();
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.filename).toBe("invoice.pdf");
+    expect(new Uint8Array(pending[0]!.data as ArrayBuffer)).toEqual(pdfBytes);
+  });
+});

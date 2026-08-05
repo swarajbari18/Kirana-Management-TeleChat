@@ -1,4 +1,12 @@
 import type { CapabilityResult } from "../../capability-registry/types.js";
+import {
+  attachmentRefsFromRaw,
+  rawAttachmentsToOutbound,
+  sanitizeCapabilityResultForContext,
+  sanitizePhaseResultForContext,
+  type RawArtifactAttachment,
+} from "../../capability-registry/artifact-delivery.js";
+import type { OutboundAttachment } from "../../worker-telegram-adapter/contracts/index.js";
 import type { StoreDatabase } from "../persistence/db.js";
 import { insertTraceEvent } from "../persistence/repositories/agent-trace-repository.js";
 import type {
@@ -153,6 +161,7 @@ export class RunContext {
   nextSeq = 1;
   contextAssembled = false;
   collaborationReplanNarrative: string | null = null;
+  private pendingDeliveryAttachments: OutboundAttachment[] = [];
   private preservedCompletedObjectives = new Map<
     string,
     { capabilityId: string; result: CapabilityResult }
@@ -173,6 +182,20 @@ export class RunContext {
     }
     const stripped = stripNewCommandPrefix(this.ctx.inbound.text);
     return stripped || this.ctx.inbound.text;
+  }
+
+  stageDeliveryAttachments(raw: RawArtifactAttachment[]) {
+    if (raw.length === 0) {
+      return undefined;
+    }
+    this.pendingDeliveryAttachments.push(...rawAttachmentsToOutbound(raw));
+    return attachmentRefsFromRaw(raw);
+  }
+
+  takePendingDeliveryAttachments(): OutboundAttachment[] {
+    const attachments = this.pendingDeliveryAttachments;
+    this.pendingDeliveryAttachments = [];
+    return attachments;
   }
 
   async ensureContextAssembled(): Promise<void> {
@@ -239,7 +262,7 @@ export class RunContext {
           `Replan v${entry.planVersion} plan:\n${JSON.stringify(entry.plan, null, 2)}`,
         );
         parts.push(
-          `Replan v${entry.planVersion} results:\n${JSON.stringify(entry.phaseResult, null, 2)}`,
+          `Replan v${entry.planVersion} results:\n${JSON.stringify(sanitizePhaseResultForContext(entry.phaseResult), null, 2)}`,
         );
         if (entry.decision) {
           parts.push(
@@ -282,12 +305,13 @@ export class RunContext {
   }
 
   decisionContextSlice(phaseResult: ExecutionPhaseResult): string {
+    const sanitizedPhase = sanitizePhaseResultForContext(phaseResult);
     const parts: string[] = [
       `Capability registry:\n${getCapabilityContextForDecision()}`,
       `Business intent: ${this.resolveBusinessIntent()}`,
       `Execution plan:\n${JSON.stringify(this.currentPlan, null, 2)}`,
       `Plan version: ${this.planVersion}`,
-      `Objective results (full CapabilityResult per objective):\n${JSON.stringify(phaseResult, null, 2)}`,
+      `Objective results (CapabilityResult per objective — artifact metadata only, no file bytes):\n${JSON.stringify(sanitizedPhase, null, 2)}`,
       `Verified facts:\n${JSON.stringify(factsForDecision(this.verifiedFactRegistry))}`,
     ];
 
@@ -319,7 +343,8 @@ export class RunContext {
     phaseResult: ExecutionPhaseResult,
     decision?: DecisionResult,
   ): string {
-    const clarifications = Object.entries(phaseResult.objectives)
+    const sanitizedPhase = sanitizePhaseResultForContext(phaseResult);
+    const clarifications = Object.entries(sanitizedPhase.objectives)
       .filter(([, v]) => v.result?.status === "clarification_needed")
       .map(([, v]) => v.result);
 
@@ -351,11 +376,12 @@ export class RunContext {
     phaseResult: ExecutionPhaseResult,
     decision?: DecisionResult,
   ): string {
-    const denied = Object.entries(phaseResult.objectives)
+    const sanitizedPhase = sanitizePhaseResultForContext(phaseResult);
+    const denied = Object.entries(sanitizedPhase.objectives)
       .filter(([, v]) => v.result?.status === "denied")
       .map(([, v]) => v.result);
 
-    const executionSummary = Object.entries(phaseResult.objectives).map(
+    const executionSummary = Object.entries(sanitizedPhase.objectives).map(
       ([objectiveId, entry]) => {
         const step = this.currentPlan?.objectives.find(
           (o) => o.objectiveId === objectiveId,
@@ -393,7 +419,7 @@ export class RunContext {
     this.replanHistory.push({
       planVersion: this.planVersion,
       plan,
-      phaseResult,
+      phaseResult: sanitizePhaseResultForContext(phaseResult),
       decision,
     });
     this.planVersion += 1;
@@ -413,7 +439,7 @@ export class RunContext {
       ) {
         this.preservedCompletedObjectives.set(step.objectiveId, {
           capabilityId: step.capabilityId,
-          result: entry.result,
+          result: sanitizeCapabilityResultForContext(entry.result),
         });
       }
     }
@@ -448,9 +474,10 @@ export class RunContext {
       toolExecutions?: BcToolExecutionRecord[];
     },
   ): void {
+    const sanitizedResult = sanitizeCapabilityResultForContext(result);
     this.bcInvocationState.set(objectiveId, {
       priorToolPlan: toolPlan,
-      priorResults: result,
+      priorResults: sanitizedResult,
     });
     if (meta && toolPlan != null) {
       this.bcInvocationLog.push({
@@ -459,7 +486,7 @@ export class RunContext {
         capabilityId: meta.capabilityId,
         objectiveDescription: meta.objectiveDescription,
         toolPlan,
-        result,
+        result: sanitizedResult,
         toolExecutions: meta.toolExecutions ?? [],
       });
     }
@@ -663,7 +690,6 @@ export class RunContext {
         operationId: execution.operationId,
         toolName: execution.toolName,
         parameters: execution.parameters,
-        agentState: execution.agentState,
         verifiedFacts: execution.verifiedFacts,
       })),
     }));
@@ -715,7 +741,7 @@ export class RunContext {
           "Prior work in this capability during this run (agent state evidence):",
           `Prior objective: ${strategic.priorObjectiveDescription}`,
           `Prior tool plan:\n${JSON.stringify(strategic.priorToolPlan, null, 2)}`,
-          `Prior execution results:\n${JSON.stringify(strategic.priorResults, null, 2)}`,
+          `Prior execution results:\n${JSON.stringify(sanitizeCapabilityResultForContext(strategic.priorResults), null, 2)}`,
           [
             "Plan one complete tool sequence for the current objective in a single operations array.",
             "This is one-shot planning, not a ReAct loop — do not emit only the next tool because prior work exists.",
@@ -738,7 +764,7 @@ export class RunContext {
     }
     if (priorResults) {
       slices.push(
-        `Prior execution results:\n${JSON.stringify(priorResults, null, 2)}`,
+        `Prior execution results:\n${JSON.stringify(sanitizeCapabilityResultForContext(priorResults), null, 2)}`,
       );
     }
     return slices;

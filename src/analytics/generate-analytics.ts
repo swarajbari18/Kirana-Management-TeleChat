@@ -1,6 +1,7 @@
 import type { StoreDatabase } from "../store-durable-object/persistence/db.js";
 import { countFinalizedBills } from "../store-durable-object/persistence/repositories/analytics-repository.js";
 import type { CapabilityResult } from "../capability-registry/types.js";
+import type { RawArtifactAttachment } from "../capability-registry/artifact-delivery.js";
 import { renderAnalysisPptx } from "../artifact/render-analysis-pptx.js";
 import { buildAnalysisSnapshot } from "./build-analysis-snapshot.js";
 import { formatIstFilenameTimestamp } from "./period-boundaries.js";
@@ -34,7 +35,11 @@ function mapDailyVerifiedFacts(snapshot: AnalysisSnapshot): Record<string, unkno
 
 export async function generateAnalytics(
   db: StoreDatabase,
-): Promise<{ result: CapabilityResult; snapshot: AnalysisSnapshot | null }> {
+): Promise<{
+  result: CapabilityResult;
+  rawAttachments: RawArtifactAttachment[];
+  snapshot: AnalysisSnapshot | null;
+}> {
   const billCount = await countFinalizedBills(db);
   if (billCount === 0) {
     return {
@@ -43,6 +48,7 @@ export async function generateAnalytics(
         verifiedFacts: {},
         refusalMessage: "No sales recorded yet — nothing to analyze.",
       },
+      rawAttachments: [],
       snapshot: null,
     };
   }
@@ -50,19 +56,20 @@ export async function generateAnalytics(
   const snapshot = await buildAnalysisSnapshot(db);
   const pptxBytes = await renderAnalysisPptx(snapshot);
   const filename = `shop-analysis-${formatIstFilenameTimestamp(new Date(snapshot.generatedAtIso))}.pptx`;
+  const rawAttachments: RawArtifactAttachment[] = [
+    {
+      filename,
+      mimeType: ANALYSIS_PPTX_MIME,
+      bytes: pptxBytes,
+    },
+  ];
 
   return {
     result: {
       status: "completed",
       verifiedFacts: mapDailyVerifiedFacts(snapshot),
-      attachments: [
-        {
-          filename,
-          mimeType: ANALYSIS_PPTX_MIME,
-          bytes: pptxBytes,
-        },
-      ],
     },
+    rawAttachments,
     snapshot,
   };
 }

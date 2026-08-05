@@ -104,10 +104,11 @@ describe("GEN-01", () => {
 describe("GEN-02", () => {
   it("with bills returns attachment and daily verifiedFacts", async () => {
     mockedCount.mockResolvedValue(1);
-    const { result } = await generateAnalytics({} as never);
+    const { result, rawAttachments } = await generateAnalytics({} as never);
     expect(result.status).toBe("completed");
     if (result.status === "completed") {
-      expect(result.attachments?.[0]?.mimeType).toBe(ANALYSIS_PPTX_MIME);
+      expect(rawAttachments[0]?.mimeType).toBe(ANALYSIS_PPTX_MIME);
+      expect(rawAttachments[0]?.bytes.byteLength).toBeGreaterThan(0);
       expect(result.verifiedFacts.today_total_sales_paise).toBe(12000);
       expect(result.verifiedFacts.analysis_attached).toBe(true);
     }
@@ -117,10 +118,8 @@ describe("GEN-02", () => {
 describe("GEN-03", () => {
   it("still attaches analytics when artifactsEnabled is false", async () => {
     mockedCount.mockResolvedValue(1);
-    const { result } = await generateAnalytics({} as never);
-    if (result.status === "completed") {
-      expect(result.attachments?.length).toBe(1);
-    }
+    const { rawAttachments } = await generateAnalytics({} as never);
+    expect(rawAttachments).toHaveLength(1);
   });
 });
 

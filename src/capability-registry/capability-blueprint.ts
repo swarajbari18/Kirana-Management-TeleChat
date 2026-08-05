@@ -12,6 +12,10 @@ import type { CapabilityResult, StructuredToolPlan } from "./types.js";
 import type { ToolPlanVerifyContext } from "./tool-plan-verify-context.js";
 import type { ParameterGroundingContext } from "./parameter-grounding-context.js";
 import { mergeToolVerifiedFacts } from "./verified-facts-merge.js";
+import {
+  stageCapabilityAttachments,
+  type RawArtifactAttachment,
+} from "./artifact-delivery.js";
 
 export interface ToolPlanVerificationResult {
   valid: boolean;
@@ -312,11 +316,7 @@ export function createCapabilityExecutor(
 
       const ordered = config.sortByDependencies(plan.operations);
       const facts: Record<string, unknown> = {};
-      const attachments: Array<{
-        filename: string;
-        mimeType: string;
-        bytes: Uint8Array;
-      }> = [];
+      const attachments: RawArtifactAttachment[] = [];
       const l1ToolResults: AgentStatePriorResults = {
         byOperationId: new Map(),
         byToolName: new Map(),
@@ -478,7 +478,7 @@ export function createCapabilityExecutor(
             status: "completed",
             verifiedFacts: facts,
             refusalMessage: toolResult.refusalMessage,
-            attachments: attachments.length > 0 ? attachments : undefined,
+            attachments: stageCapabilityAttachments(runContext, attachments),
           };
           if (runContext) {
             storeInvocationMeta(
@@ -503,7 +503,7 @@ export function createCapabilityExecutor(
           {
             status: "completed",
             verifiedFacts: facts,
-            attachments: attachments.length > 0 ? attachments : undefined,
+            attachments: stageCapabilityAttachments(runContext, attachments),
           },
           invocationToolExecutions,
         );
@@ -512,7 +512,7 @@ export function createCapabilityExecutor(
       return {
         status: "completed",
         verifiedFacts: facts,
-        attachments: attachments.length > 0 ? attachments : undefined,
+        attachments: stageCapabilityAttachments(runContext, attachments),
       };
     } catch (error) {
       return config.mapToolError(error);

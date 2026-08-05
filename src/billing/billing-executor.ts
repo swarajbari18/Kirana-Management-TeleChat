@@ -18,6 +18,10 @@ import type {
   ToolExecutionPlanContext,
   ToolStepResult,
 } from "../capability-registry/capability-blueprint.js";
+import {
+  stageCapabilityAttachments,
+  type RawArtifactAttachment,
+} from "../capability-registry/artifact-delivery.js";
 import { buildOpenDraftSummaries } from "../store-durable-object/persistence/repositories/billing-repository.js";
 import { formatOpenDraftsSummaryForContext } from "./draft-focus-resolver.js";
 import { loadDraftProjection } from "./draft-projection.js";
@@ -366,11 +370,7 @@ export function createBillingExecutor(
 
       const ordered = config.sortByDependencies(plan.operations);
       const facts: Record<string, unknown> = {};
-      const attachments: Array<{
-        filename: string;
-        mimeType: string;
-        bytes: Uint8Array;
-      }> = [];
+      const attachments: RawArtifactAttachment[] = [];
       const l1ToolResults: AgentStatePriorResults = {
         byOperationId: new Map(),
         byToolName: new Map(),
@@ -566,7 +566,7 @@ export function createBillingExecutor(
             status: "completed",
             verifiedFacts: facts,
             refusalMessage: toolResult.refusalMessage,
-            attachments: attachments.length > 0 ? attachments : undefined,
+            attachments: stageCapabilityAttachments(runContext, attachments),
           };
           if (runContext) {
             runContext.storeBcInvocation(
@@ -587,7 +587,7 @@ export function createBillingExecutor(
       const completedResult: CapabilityResult = {
         status: "completed",
         verifiedFacts: facts,
-        attachments: attachments.length > 0 ? attachments : undefined,
+        attachments: stageCapabilityAttachments(runContext, attachments),
       };
 
       if (runContext) {

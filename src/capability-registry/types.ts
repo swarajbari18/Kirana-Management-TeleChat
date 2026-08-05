@@ -1,13 +1,16 @@
+/** Artifact metadata for agent state / LLM context — never raw bytes. */
+export interface CapabilityAttachmentRef {
+  filename: string;
+  mimeType: string;
+  byteLength: number;
+}
+
 export type CapabilityResult =
   | {
       status: "completed";
       verifiedFacts: Record<string, unknown>;
       refusalMessage?: string;
-      attachments?: Array<{
-        filename: string;
-        mimeType: string;
-        bytes: Uint8Array;
-      }>;
+      attachments?: CapabilityAttachmentRef[];
     }
   | { status: "clarification_needed"; reason: string; requiredInfo: string }
   | { status: "denied"; reason: "user_rejected" | "not_confirmed" | "timeout" }

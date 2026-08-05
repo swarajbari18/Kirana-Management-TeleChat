@@ -18,7 +18,6 @@ import { verifyCapabilityPlan } from "./execution-engine/plan-verification.js";
 import { verifyGroundedResponse } from "./faithfulness/index.js";
 import { planCapabilities } from "./planning-mode.js";
 import { generateAskUserResponse } from "./response-generation.js";
-import type { ExecutionPhaseResult } from "./execution-engine/types.js";
 import type { OrchestrationContext } from "./types.js";
 import type { OutboundAttachment } from "../worker-telegram-adapter/contracts/index.js";
 
@@ -38,25 +37,8 @@ function deliver(text: string, attachments: OutboundAttachment[] = []): Executio
   };
 }
 
-function collectAttachments(phaseResult: ExecutionPhaseResult): OutboundAttachment[] {
-  const attachments: OutboundAttachment[] = [];
-  for (const entry of Object.values(phaseResult.objectives)) {
-    if (entry.result?.status !== "completed" || !entry.result.attachments) {
-      continue;
-    }
-    for (const attachment of entry.result.attachments) {
-      attachments.push({
-        type: "document",
-        filename: attachment.filename,
-        mimeType: attachment.mimeType,
-        data: attachment.bytes.buffer.slice(
-          attachment.bytes.byteOffset,
-          attachment.bytes.byteOffset + attachment.bytes.byteLength,
-        ) as ArrayBuffer,
-      });
-    }
-  }
-  return attachments;
+function collectAttachments(runContext: RunContext): OutboundAttachment[] {
+  return runContext.takePendingDeliveryAttachments();
 }
 
 export async function orchestrate(
@@ -265,7 +247,7 @@ export async function orchestrate(
         );
 
         runContext.discard();
-        return deliver(response.text, collectAttachments(phaseResult));
+        return deliver(response.text, collectAttachments(runContext));
       }
 
       const finalText = await verifyGroundedResponse(
@@ -276,7 +258,7 @@ export async function orchestrate(
       );
 
       runContext.discard();
-      return deliver(finalText, collectAttachments(phaseResult));
+      return deliver(finalText, collectAttachments(runContext));
     }
 
     await runContext.appendTrace(

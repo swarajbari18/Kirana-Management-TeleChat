@@ -22,13 +22,11 @@ export async function executeAnalytics(
   void objective;
   void ctx;
 
-  const { result, snapshot } = await generateAnalytics(db);
+  const { result, rawAttachments, snapshot } = await generateAnalytics(db);
 
   if (runContext) {
     const attachmentFilename =
-      result.status === "completed"
-        ? (result.attachments?.[0]?.filename ?? "")
-        : "";
+      rawAttachments[0]?.filename ?? "";
     await runContext.appendTrace(
       "capability",
       "analytics",
@@ -43,12 +41,8 @@ export async function executeAnalytics(
           },
       parentEventId,
     );
-    if (
-      result.status === "completed" &&
-      result.attachments?.[0] &&
-      snapshot
-    ) {
-      const attachment = result.attachments[0];
+    if (rawAttachments[0] && snapshot) {
+      const attachment = rawAttachments[0];
       await runContext.appendTrace(
         "capability",
         "analytics",
@@ -62,6 +56,13 @@ export async function executeAnalytics(
         parentEventId,
       );
     }
+  }
+
+  if (result.status === "completed" && runContext && rawAttachments.length > 0) {
+    return {
+      ...result,
+      attachments: runContext.stageDeliveryAttachments(rawAttachments),
+    };
   }
 
   return result;
