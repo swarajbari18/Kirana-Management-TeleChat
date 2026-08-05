@@ -1,4 +1,8 @@
 import type { StructuredToolPlan, ToolPlanStep } from "../../capability-registry/types.js";
+import type {
+  PriorBcQueryState,
+  ToolPlanVerifyContext,
+} from "../../capability-registry/tool-plan-verify-context.js";
 
 export interface ToolPlanVerificationResult {
   valid: boolean;
@@ -15,12 +19,85 @@ const MUTATING_OPS = new Set([
   "record_credit_from_bill",
 ]);
 
-const NAME_DRIVEN_OPS_REQUIRING_QUERY = new Set([
+const OPS_REQUIRING_PRIOR_QUERY = new Set([
+  "create_customer",
   "record_manual_credit",
   "record_payment",
 ]);
 
-function hasPriorQueryKhata(
+function customerNameFromWriteOp(op: ToolPlanStep): string | undefined {
+  if (typeof op.parameters.customer_name === "string") {
+    return op.parameters.customer_name;
+  }
+  return undefined;
+}
+
+function khataManageOperation(op: ToolPlanStep): string | undefined {
+  if (op.toolName !== "manage_khata_transaction") {
+    return undefined;
+  }
+  const operation = String(op.parameters.operation ?? "");
+  return MUTATING_OPS.has(operation) ? operation : undefined;
+}
+
+function hasPriorKhataQueryInAgentState(
+  writeOperation: string,
+  customerName: string | undefined,
+  priorStates: PriorBcQueryState[],
+): boolean {
+  const normalizedTarget = customerName?.trim().toLowerCase();
+
+  for (let i = priorStates.length - 1; i >= 0; i--) {
+    const entry = priorStates[i]!;
+    if (entry.queryTool !== "query_khata") {
+      continue;
+    }
+
+    const entryCustomer = entry.customerName;
+    if (
+      normalizedTarget &&
+      entryCustomer &&
+      entryCustomer.trim().toLowerCase() !== normalizedTarget
+    ) {
+      continue;
+    }
+
+    const exactMatchCount = Number(
+      (entry.agentState as { exactMatchCount?: number }).exactMatchCount ?? -1,
+    );
+
+    if (writeOperation === "create_customer" && exactMatchCount === 0) {
+      return true;
+    }
+    if (
+      (writeOperation === "record_manual_credit" ||
+        writeOperation === "record_payment") &&
+      exactMatchCount === 1
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasCreateCustomerBefore(
+  operations: ToolPlanStep[],
+  targetOp: ToolPlanStep,
+): boolean {
+  const ordered = sortByDependencies(operations);
+  const targetIndex = ordered.findIndex(
+    (op) => op.operationId === targetOp.operationId,
+  );
+  if (targetIndex <= 0) {
+    return false;
+  }
+  return ordered.slice(0, targetIndex).some(
+    (op) => khataManageOperation(op) === "create_customer",
+  );
+}
+
+function hasPriorQueryKhataInPlan(
   operations: ToolPlanStep[],
   targetOp: ToolPlanStep,
 ): boolean {
@@ -36,11 +113,86 @@ function hasPriorQueryKhata(
     .some((op) => op.toolName === "query_khata");
 }
 
-export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationResult {
+function hasPriorQueryKhata(
+  operations: ToolPlanStep[],
+  targetOp: ToolPlanStep,
+  context?: ToolPlanVerifyContext,
+): boolean {
+  const writeOperation = khataManageOperation(targetOp);
+  if (!writeOperation || !OPS_REQUIRING_PRIOR_QUERY.has(writeOperation)) {
+    return true;
+  }
+
+  if (hasPriorQueryKhataInPlan(operations, targetOp)) {
+    return true;
+  }
+
+  if (
+    (writeOperation === "record_manual_credit" ||
+      writeOperation === "record_payment") &&
+    hasCreateCustomerBefore(operations, targetOp) &&
+    context?.priorQueryAgentStates.length
+  ) {
+    const customerName = customerNameFromWriteOp(targetOp);
+    if (
+      hasPriorKhataQueryInAgentState(
+        "create_customer",
+        customerName,
+        context.priorQueryAgentStates,
+      )
+    ) {
+      return true;
+    }
+  }
+
+  if (context?.priorQueryAgentStates.length) {
+    return hasPriorKhataQueryInAgentState(
+      writeOperation,
+      customerNameFromWriteOp(targetOp),
+      context.priorQueryAgentStates,
+    );
+  }
+
+  return false;
+}
+
+function verifyQueryBeforeWrites(
+  operations: ToolPlanStep[],
+  diagnostics: string[],
+): boolean {
+  const ordered = sortByDependencies(operations);
+  const firstQueryIndex = ordered.findIndex((op) => op.toolName === "query_khata");
+  const firstWriteIndex = ordered.findIndex((op) => {
+    const operation = khataManageOperation(op);
+    return operation != null && OPS_REQUIRING_PRIOR_QUERY.has(operation);
+  });
+
+  if (firstWriteIndex === -1) {
+    return true;
+  }
+
+  if (firstQueryIndex !== -1 && firstQueryIndex > firstWriteIndex) {
+    diagnostics.push(
+      "query_khata must be planned before manage_khata_transaction operations that depend on customer identity",
+    );
+    return false;
+  }
+
+  return true;
+}
+
+export function verifyToolPlan(
+  plan: StructuredToolPlan,
+  context?: ToolPlanVerifyContext,
+): ToolPlanVerificationResult {
   const diagnostics: string[] = [];
 
   if (!plan.operations || plan.operations.length === 0) {
     diagnostics.push("Plan has no operations");
+    return { valid: false, reason: diagnostics[0], diagnostics };
+  }
+
+  if (!verifyQueryBeforeWrites(plan.operations, diagnostics)) {
     return { valid: false, reason: diagnostics[0], diagnostics };
   }
 
@@ -81,8 +233,8 @@ export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationRe
       }
 
       if (
-        NAME_DRIVEN_OPS_REQUIRING_QUERY.has(operation) &&
-        !hasPriorQueryKhata(plan.operations, op)
+        OPS_REQUIRING_PRIOR_QUERY.has(operation) &&
+        !hasPriorQueryKhata(plan.operations, op, context)
       ) {
         diagnostics.push(
           "query_khata is a required dependency of manage_khata_transaction for name-driven operations",

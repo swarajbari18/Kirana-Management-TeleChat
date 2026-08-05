@@ -8,6 +8,10 @@ Commands:
 
 Just type what you need. For example: "How much sugar is left?"`;
 
+export const NEW_CONVERSATION_MESSAGE = `Conversation context cleared. Your shop data is unchanged.
+
+What would you like to do next?`;
+
 export const WELCOME_MESSAGE_FIRST_START = `${WELCOME_MESSAGE}
 
 Your Kirana store is now registered. You're all set to start.

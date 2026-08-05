@@ -58,6 +58,9 @@ function hasPriorQueryInAgentState(
 
   for (let i = priorStates.length - 1; i >= 0; i--) {
     const entry = priorStates[i]!;
+    if (entry.queryTool !== "query_inventory") {
+      continue;
+    }
     if (
       normalizedTarget &&
       entry.productName &&

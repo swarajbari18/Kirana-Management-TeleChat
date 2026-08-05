@@ -464,6 +464,28 @@ export class RunContext {
     }
   }
 
+  private resolveQueryCustomerNameFromExecution(
+    execution: BcToolExecutionRecord,
+  ): string | undefined {
+    if (typeof execution.parameters.customer_name === "string") {
+      return execution.parameters.customer_name;
+    }
+
+    if (typeof execution.verifiedFacts.customer_name === "string") {
+      return execution.verifiedFacts.customer_name;
+    }
+
+    const agentState = execution.agentState as {
+      exactMatchCount?: number;
+      exactMatches?: Array<{ canonicalName?: string }>;
+    };
+    if (agentState.exactMatchCount === 1 && agentState.exactMatches?.[0]) {
+      return agentState.exactMatches[0].canonicalName;
+    }
+
+    return undefined;
+  }
+
   private resolveQueryProductNameFromExecution(
     execution: BcToolExecutionRecord,
   ): string | undefined {
@@ -498,13 +520,20 @@ export class RunContext {
         continue;
       }
       for (const execution of entry.toolExecutions) {
-        if (execution.toolName !== "query_inventory") {
-          continue;
+        if (execution.toolName === "query_inventory") {
+          states.push({
+            queryTool: "query_inventory",
+            productName: this.resolveQueryProductNameFromExecution(execution),
+            agentState: execution.agentState,
+          });
         }
-        states.push({
-          productName: this.resolveQueryProductNameFromExecution(execution),
-          agentState: execution.agentState,
-        });
+        if (execution.toolName === "query_khata") {
+          states.push({
+            queryTool: "query_khata",
+            customerName: this.resolveQueryCustomerNameFromExecution(execution),
+            agentState: execution.agentState,
+          });
+        }
       }
     }
     return states;
@@ -553,6 +582,60 @@ export class RunContext {
         if (
           (writeTool === "update_inventory" ||
             writeTool === "allocate_inventory") &&
+          exactMatchCount !== 1
+        ) {
+          continue;
+        }
+
+        return execution.agentState;
+      }
+    }
+    return null;
+  }
+
+  findPriorKhataQueryAgentState(
+    capabilityId: string,
+    customerName?: string,
+    writeOperation?:
+      | "create_customer"
+      | "record_manual_credit"
+      | "record_payment",
+  ): Record<string, unknown> | null {
+    const normalizedTarget = customerName?.trim().toLowerCase();
+    for (let i = this.bcInvocationLog.length - 1; i >= 0; i--) {
+      const entry = this.bcInvocationLog[i]!;
+      if (entry.capabilityId !== capabilityId) {
+        continue;
+      }
+      if (entry.result.status !== "completed") {
+        continue;
+      }
+
+      for (let j = entry.toolExecutions.length - 1; j >= 0; j--) {
+        const execution = entry.toolExecutions[j]!;
+        if (execution.toolName !== "query_khata") {
+          continue;
+        }
+
+        const entryCustomer = this.resolveQueryCustomerNameFromExecution(execution);
+        if (
+          normalizedTarget &&
+          entryCustomer &&
+          entryCustomer.trim().toLowerCase() !== normalizedTarget
+        ) {
+          continue;
+        }
+
+        const exactMatchCount = Number(
+          (execution.agentState as { exactMatchCount?: number }).exactMatchCount ??
+            -1,
+        );
+        if (writeOperation === "create_customer" && exactMatchCount !== 0) {
+          continue;
+        }
+        if (
+          (writeOperation === "record_manual_credit" ||
+            writeOperation === "record_payment") &&
           exactMatchCount !== 1
         ) {
           continue;
@@ -632,7 +715,16 @@ export class RunContext {
           `Prior objective: ${strategic.priorObjectiveDescription}`,
           `Prior tool plan:\n${JSON.stringify(strategic.priorToolPlan, null, 2)}`,
           `Prior execution results:\n${JSON.stringify(strategic.priorResults, null, 2)}`,
-          "Plan one complete tool sequence for the current objective in a single operations array. This is one-shot planning, not a ReAct loop — do not emit only the next tool because prior work exists. Include every tool still required (e.g. query_inventory then register_inventory or update_inventory when identity must be resolved).",
+          [
+            "Plan one complete tool sequence for the current objective in a single operations array.",
+            "This is one-shot planning, not a ReAct loop — do not emit only the next tool because prior work exists.",
+            "Include every tool still required, in correct dependency order (identity reads before writes).",
+            "Examples:",
+            "- inventory: query_inventory then register_inventory or update_inventory",
+            "- khata: query_khata then create_customer then record_manual_credit for new customer udhar",
+            "- billing: ordered manage_draft_bill operations for the full draft edit in one plan",
+            "- user_profile: read_shop_profile before propose_* updates when profile state matters",
+          ].join("\n"),
         ].join("\n"),
       ];
     }

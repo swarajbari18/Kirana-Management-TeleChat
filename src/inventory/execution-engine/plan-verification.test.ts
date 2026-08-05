@@ -98,6 +98,7 @@ describe("inventory plan verification INV-PLAN-03", () => {
         capabilityId: "inventory",
         priorQueryAgentStates: [
           {
+            queryTool: "query_inventory",
             productName: "Maggi 70g",
             agentState: {
               exactMatchCount: 0,
@@ -128,6 +129,7 @@ describe("inventory plan verification INV-PLAN-03", () => {
         capabilityId: "inventory",
         priorQueryAgentStates: [
           {
+            queryTool: "query_inventory",
             productName: "Maggi 70g",
             agentState: {
               exactMatchCount: 1,

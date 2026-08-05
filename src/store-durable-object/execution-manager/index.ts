@@ -5,6 +5,7 @@ import type { ExecutionResult } from "../../worker-telegram-adapter/contracts/in
 import { orchestrate } from "../../global-orchestrator/index.js";
 import { createRunContext } from "../agent-state/run-context.js";
 import {
+  NEW_CONVERSATION_MESSAGE,
   WELCOME_MESSAGE,
   WELCOME_MESSAGE_FIRST_START,
 } from "../constants.js";
@@ -12,6 +13,7 @@ import {
   persistAssistantTurn,
   process as processConversation,
 } from "../conversation-manager/index.js";
+import { stripNewCommand } from "../conversation-manager/new-command-strip.js";
 import {
   emitDeliveryConfirmedLog,
   emitRuntimeLog,
@@ -122,6 +124,13 @@ export async function processWorkItem(
     ) {
       result = await handleStart(db, conversationContext.storeInitialized);
       participatingComponents.push("start-handler");
+    } else if (
+      request.inbound.kind === "command" &&
+      request.inbound.command === "new" &&
+      stripNewCommand(request.inbound.text) === ""
+    ) {
+      result = handleNewConversation();
+      participatingComponents.push("new-handler");
     } else {
       participatingComponents.push("global-orchestrator");
       const runContext = createRunContext(db, {
@@ -297,6 +306,14 @@ export async function confirmTelegramDelivery(
     action: "telegram_delivery_confirmed",
     updateId,
   });
+}
+
+function handleNewConversation(): ExecutionResult {
+  return {
+    status: "ok",
+    messages: [{ type: "text", text: NEW_CONVERSATION_MESSAGE }],
+    attachments: [],
+  };
 }
 
 async function handleStart(

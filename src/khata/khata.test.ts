@@ -24,7 +24,7 @@ describe("KHATA-PLAN-01", () => {
     expect(result.valid).toBe(false);
   });
 
-  it("allows create_customer without prior query_khata in the plan", () => {
+  it("rejects create_customer before query_khata in the same plan", () => {
     const result = verifyToolPlan({
       operations: [
         {
@@ -58,7 +58,8 @@ describe("KHATA-PLAN-01", () => {
         },
       ],
     });
-    expect(result.valid).toBe(true);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain("query_khata must be planned before");
   });
 
   it("accepts query then create then credit for new customer flow", () => {
@@ -95,6 +96,51 @@ describe("KHATA-PLAN-01", () => {
         },
       ],
     });
+    expect(result.valid).toBe(true);
+  });
+
+  it("accepts create and credit when prior query_khata agent state exists", () => {
+    const result = verifyToolPlan(
+      {
+        operations: [
+          {
+            operationId: "c1",
+            operationDescription: "create",
+            toolName: "manage_khata_transaction",
+            parameters: {
+              operation: "create_customer",
+              customer_name: "Ramesh",
+            },
+            dependencies: [],
+          },
+          {
+            operationId: "m1",
+            operationDescription: "credit",
+            toolName: "manage_khata_transaction",
+            parameters: {
+              operation: "record_manual_credit",
+              customer_name: "Ramesh",
+              amount: 500,
+            },
+            dependencies: ["c1"],
+          },
+        ],
+      },
+      {
+        capabilityId: "khata",
+        priorQueryAgentStates: [
+          {
+            queryTool: "query_khata",
+            customerName: "Ramesh",
+            agentState: {
+              exactMatchCount: 0,
+              exactMatches: [],
+              mode: "by_customer",
+            },
+          },
+        ],
+      },
+    );
     expect(result.valid).toBe(true);
   });
 });

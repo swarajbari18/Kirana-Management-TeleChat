@@ -40,7 +40,11 @@ businessIntent must reflect the user's message, NOT repeat a single objectiveDes
 
 Sale / finalize business operation: Finalizing a sale creates a financial record (billing), then reduces stock (inventory commit_bill_sale after finalize), and if payment is khata/udhar, records customer credit (khata). These are separate capabilities assigned as separate objectives with dependencies — not hidden inside billing. Cash/UPI sales do not need a khata objective. Product identity for a sale often starts with an inventory read before billing builds the draft.
 
-Assign one complete business outcome per capability objective. Do not split a single inventory stock receive/add flow into separate "query" and "register/update" objectives — the inventory capability plans and runs its full tool sequence in one invocation.
+Assign one complete business outcome per capability objective. Do not split a single capability flow into separate read and write objectives — each capability plans and runs its full tool sequence in one invocation:
+- inventory: query + register/update/allocate in one inventory invocation
+- khata: query + create/record in one khata invocation
+- billing: draft edits as one billing invocation (finalize is a separate single-op plan when needed)
+- user_profile: profile reads and proposed updates in one user_profile invocation when both are needed
 
 On replan or retry, use the evidence in the conversation context (prior plan, results, decisions, or verifier feedback) to revise intent, objectives, or assignments. Do not invent business facts.
 

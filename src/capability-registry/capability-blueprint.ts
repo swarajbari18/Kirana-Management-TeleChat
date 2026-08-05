@@ -81,34 +81,63 @@ function seedL1FromPriorBcInvocation(
   plan: StructuredToolPlan,
   l1ToolResults: AgentStatePriorResults,
 ): void {
-  if (l1ToolResults.byToolName.has("query_inventory")) {
-    return;
+  if (!l1ToolResults.byToolName.has("query_inventory")) {
+    const inventoryWriteOp = plan.operations.find((op) =>
+      ["register_inventory", "update_inventory", "allocate_inventory"].includes(
+        op.toolName,
+      ),
+    );
+    if (inventoryWriteOp) {
+      const productName =
+        typeof inventoryWriteOp.parameters.product_name === "string"
+          ? inventoryWriteOp.parameters.product_name
+          : undefined;
+
+      const prior = runContext.findPriorQueryAgentState(
+        capabilityId,
+        productName,
+        inventoryWriteOp.toolName as
+          | "register_inventory"
+          | "update_inventory"
+          | "allocate_inventory",
+      );
+      if (prior) {
+        l1ToolResults.byToolName.set("query_inventory", prior);
+      }
+    }
   }
 
-  const writeOp = plan.operations.find((op) =>
-    ["register_inventory", "update_inventory", "allocate_inventory"].includes(
-      op.toolName,
-    ),
-  );
-  if (!writeOp) {
-    return;
-  }
+  if (!l1ToolResults.byToolName.has("query_khata")) {
+    const khataWriteOp = plan.operations.find((op) => {
+      if (op.toolName !== "manage_khata_transaction") {
+        return false;
+      }
+      const operation = String(op.parameters.operation ?? "");
+      return [
+        "create_customer",
+        "record_manual_credit",
+        "record_payment",
+      ].includes(operation);
+    });
+    if (khataWriteOp) {
+      const customerName =
+        typeof khataWriteOp.parameters.customer_name === "string"
+          ? khataWriteOp.parameters.customer_name
+          : undefined;
+      const operation = String(khataWriteOp.parameters.operation ?? "") as
+        | "create_customer"
+        | "record_manual_credit"
+        | "record_payment";
 
-  const productName =
-    typeof writeOp.parameters.product_name === "string"
-      ? writeOp.parameters.product_name
-      : undefined;
-
-  const prior = runContext.findPriorQueryAgentState(
-    capabilityId,
-    productName,
-    writeOp.toolName as
-      | "register_inventory"
-      | "update_inventory"
-      | "allocate_inventory",
-  );
-  if (prior) {
-    l1ToolResults.byToolName.set("query_inventory", prior);
+      const prior = runContext.findPriorKhataQueryAgentState(
+        capabilityId,
+        customerName,
+        operation,
+      );
+      if (prior) {
+        l1ToolResults.byToolName.set("query_khata", prior);
+      }
+    }
   }
 }
 
