@@ -1,4 +1,13 @@
+import { formatPaiseAsRupees } from "../../billing/gst.js";
 import type { VerifiedFactRecord, VerifiedFactValueType } from "./types.js";
+
+function formatPaiseLabel(paise: string): string {
+  const n = Number.parseInt(paise, 10);
+  if (Number.isNaN(n)) {
+    return paise;
+  }
+  return formatPaiseAsRupees(n);
+}
 
 const BILL_FIELDS: Array<{
   field: string;
@@ -23,13 +32,13 @@ const BILL_FIELDS: Array<{
   {
     field: "draft_subtotal_paise",
     valueType: "number",
-    label: (v) => `Draft subtotal (paise): ${v}`,
+    label: (v) => `Draft subtotal: ${formatPaiseLabel(v)}`,
   },
   {
     field: "grand_total_paise",
     valueType: "number",
     label: (v, ctx) =>
-      `Bill total for ${ctx.customer_name ?? "customer"}: ${v} paise`,
+      `Bill total for ${ctx.customer_name ?? "customer"}: ${formatPaiseLabel(v)}`,
   },
   {
     field: "invoice_attached",
@@ -39,17 +48,17 @@ const BILL_FIELDS: Array<{
   {
     field: "subtotal_paise",
     valueType: "number",
-    label: (v) => `Bill subtotal (paise): ${v}`,
+    label: (v) => `Bill subtotal: ${formatPaiseLabel(v)}`,
   },
   {
     field: "cgst_total_paise",
     valueType: "number",
-    label: (v) => `CGST total (paise): ${v}`,
+    label: (v) => `CGST total: ${formatPaiseLabel(v)}`,
   },
   {
     field: "sgst_total_paise",
     valueType: "number",
-    label: (v) => `SGST total (paise): ${v}`,
+    label: (v) => `SGST total: ${formatPaiseLabel(v)}`,
   },
   {
     field: "quantityOnHand",
@@ -163,7 +172,7 @@ export function buildBillingFactRecords(
         value: qty,
         valueType: "number",
         identity: { canonicalName: productName },
-        catalogLabel: `${productName} on draft: qty ${qty} @ ${price} paise`,
+        catalogLabel: `${productName} on draft: qty ${qty} @ ${formatPaiseLabel(price)}`,
       });
     }
   }
@@ -188,7 +197,7 @@ export function buildBillingFactRecords(
         value: total,
         valueType: "number",
         identity: { canonicalName: productName },
-        catalogLabel: `${productName} line total: ${total} paise`,
+        catalogLabel: `${productName} line total: ${formatPaiseLabel(total)}`,
       });
     }
   }

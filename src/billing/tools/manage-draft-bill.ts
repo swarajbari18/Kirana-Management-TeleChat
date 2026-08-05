@@ -27,6 +27,7 @@ import { resolveDraftFocus } from "../draft-focus-resolver.js";
 import { loadDraftProjection } from "../draft-projection.js";
 import { validateOperationAgainstStateMachine } from "../draft-state-machine.js";
 import { ClarificationError } from "../errors.js";
+import { inventoryRupeesToPaise } from "../inventory-prices.js";
 import { computeDraftTotals } from "../gst.js";
 import { formatCancelDraftConfirmationTable } from "../confirmation/format-cancel-draft-confirmation-table.js";
 import type {
@@ -106,8 +107,8 @@ async function resolveProductForName(
     sku: match.sku,
     productName: match.productName,
     unit: match.unit,
-    sellPricePaise: match.sellPrice,
-    costPricePaise: match.costPrice,
+    sellPricePaise: inventoryRupeesToPaise(match.sellPrice),
+    costPricePaise: inventoryRupeesToPaise(match.costPrice),
     hsnCode: match.hsnCode,
     gstRate: match.gstRate,
   };

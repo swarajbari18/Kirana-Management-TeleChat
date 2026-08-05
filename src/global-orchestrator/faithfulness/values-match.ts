@@ -12,8 +12,19 @@ export function valuesMatch(
       return shown === fact;
     }
     case "number": {
-      const shownNum = Number.parseFloat(asShown.replace(/,/g, ""));
+      const stripped = asShown.replace(/,/g, "").trim();
       const factNum = Number.parseFloat(factValue);
+      if (stripped.startsWith("₹")) {
+        const rupees = Number.parseFloat(stripped.slice(1));
+        if (
+          !Number.isNaN(rupees) &&
+          !Number.isNaN(factNum) &&
+          Math.round(rupees * 100) === factNum
+        ) {
+          return true;
+        }
+      }
+      const shownNum = Number.parseFloat(stripped);
       if (Number.isNaN(shownNum) || Number.isNaN(factNum)) {
         return false;
       }

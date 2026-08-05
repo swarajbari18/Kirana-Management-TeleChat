@@ -167,8 +167,6 @@ export async function processWorkItem(
         replyToMessageId: request.delivery.replyToMessageId,
       });
 
-      await input.confirmTelegramDelivery(request.transport.updateId);
-
       if (result.status === "ok") {
         for (const message of result.messages) {
           if (message.type === "text") {

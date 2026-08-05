@@ -1,198 +1,158 @@
-# Kirana-Management-TeleChat
+# Kirana Ops Agent
 
-Manage a Kirana store from a Telegram chat bot.
 
-Component 1 delivers the **transport boundary**: a Cloudflare Worker that receives Telegram webhooks, routes each Telegram user to their own Store Durable Object, and delivers outbound replies via the Telegram Bot API.
+|                    |                                              |
+| ------------------ | -------------------------------------------- |
+| **Bot**            | `@username` *(fill after deploy)*            |
+| **Demo recording** | *(link to 4-5 min walkthrough)*              |
+| **Demo script**    | [docs/demo-queries.md](docs/demo-queries.md) |
 
-## Documentation
 
-| Document | Purpose |
-|----------|---------|
-| [docs/system_Architecture.md](docs/system_Architecture.md) | Full system architecture |
-| [docs/agent-traceability-and-agent-state.md](docs/agent-traceability-and-agent-state.md) | Agent state, traceability, harness model, C4 audit requirements |
-| [docs/goals/component-01-worker-telegram-adapter.md](docs/goals/component-01-worker-telegram-adapter.md) | Component 1 goal document & acceptance criteria |
-| [running.md](running.md) | Deploy, webhook setup, validation, troubleshooting |
+---
 
-## Architecture summary
+## Runtime
 
-```
-Telegram → POST /webhook → Worker (stateless)
-                              ↓ RPC
-                    Store Durable Object (per user)
-                              ↓
-                    ExecutionResult → Telegram Bot API
-```
+One Telegram user = one Store Durable Object = one SQLite database. Everything for that shop runs single-threaded inside the DO. Two bills at once, or a bill plus a stock-in, queue up instead of corrupting stock.
 
-- **Worker** (`src/worker-telegram-adapter/`) — webhook validation, update parsing, multi-tenant routing (`storeId = String(telegramUserId)`), `ApplicationRequest` normalization, async `waitUntil` handoff, outbound `sendMessage` / `sendDocument`.
-- **Store Durable Object** (`src/store-durable-object/`) — stub in Component 1: `/start` → welcome; all other supported text → placeholder greeting. Grows into full store runtime in later components.
-- **Contracts** (`src/worker-telegram-adapter/contracts/`) — `ApplicationRequest` and `ExecutionResult` (including attachment types) are the only Worker ↔ DO interface.
+The Worker only moves messages. It validates the webhook, routes by `from.id`, returns HTTP 200 fast, and sends replies later. Before any work starts, the Execution Manager checks `execution_ledger` for the `update_id`. Telegram redelivery hits that gate and stops. No double bill.
 
-## Design decisions (Component 1)
+`/new` clears the chat session. Shop profile, preferences, inventory, bills, and khata stay. Conversation history feeds planning. Business data lives in SQLite and reloads every run.
 
-| Topic | Decision |
-|-------|----------|
-| Tenancy | One Telegram `from.id` = one store = one DO (`idFromName(storeId)`) |
-| Worker → DO | Cloudflare RPC `handleApplicationRequest` |
-| Webhook timing | HTTP 200 after handoff; DO + Telegram outbound in `ctx.waitUntil()` |
-| Unsupported inbound | No DO call; reply with fixed string; still 200 |
-| Commands | `bot_command` entity detection (not regex) |
-| Telegram types | `@grammyjs/types` only; thin `fetch`-based API client |
-| Testing | Pure logic unit tests with real Update fixtures; integration against deployed worker (see `running.md`) |
+---
 
-## Project structure
+## Control loop
 
-```
-src/
-├── index.ts                    # Thin bootstrap (POST /webhook only)
-├── worker-telegram-adapter/    # Component 1 — transport boundary
-│   ├── contracts/              # ApplicationRequest, ExecutionResult
-│   ├── telegram/               # Command parsing (bot_command entities)
-│   ├── fixtures/               # Real-shaped Telegram Update JSON
-│   ├── integration/            # Production integration tests
-│   └── *.ts                    # Pipeline modules + colocated unit tests
-└── store-durable-object/       # Component 3 stub (grows in later components)
-```
+The Global Orchestrator is a harness. TypeScript moves between phases. Gemini only produces structured output at fixed steps. The model never picks when to verify or execute. Business rules sit in code and tools, not in prompt hope.
 
-Unit tests cover pure deterministic logic (parsers, normalizer, handler). Colocated as `*.test.ts`. Run with `npm test` — see [running.md](running.md) for full suite with `.dev.vars`.
+### Global Orchestrator
 
-## Bot status
-
-| Field | Value |
-|-------|-------|
-| Bot @username | _(fill after BotFather creation)_ |
-| Deployed URL | _(fill after `npm run deploy`)_ |
-| Deploy status | _(fill after deploy)_ |
-
-## User-facing strings (locked)
-
-| Situation | Message |
-|-----------|---------|
-| Unsupported inbound | `I only support text conversations right now.` |
-| Generic error | `We're facing some problems right now. Please try again later.` |
-| Stub greeting | `hi MF it's good to see you` |
-
-## Component 5.1 — Inventory evaluation
-
-Component 5.1 replaces the inventory unavailable stub with four tools: `query_inventory`, `register_inventory`, `update_inventory`, `allocate_inventory`.
-
-- **Exact-first search** — fuzzy/similar candidates appear only in clarification options, never as write identity.
-- **SKU for writes** comes from prior `query_inventory` exact match in L1 agent state (blueprint tool-result map), not from LLM-invented `sku`.
-- **Stock decreases** are refused on register/update (`completed` + `refusalMessage`); permanent sale decreases use `commit_bill_sale` after billing finalize (5.3).
-- **Allocate** holds stock aside for a customer (physical reserve) — not a billing draft and not auto on `add_item`. `quantity_on_hand` unchanged on reserve.
-- **Movement ledger** — every stock increase writes an `inventory_movements` row in the same transaction.
-
-### Eval
-
-1. `wrangler deploy`
-2. `npm run eval` (posts `evaluationqueries.csv` via webhook → DO)
-3. Export traces; audit with `sql/agent-trace.sql` per `update_id`
-
-C51 rows cover register (W1), update (W2), not-found read (W5), low stock (W6), refusal (W7), clarify (W3/W4), allocate (W10).
-
-## Component 5.2 — Billing evaluation
-
-Component 5.2 replaces the billing unavailable stub with three tools: `manage_draft_bill`, `finalize_bill`, `query_bill`.
-
-- **Event-sourced drafts** — append-only `billing_draft_events`; draft focus = last-edited open draft (Policy A).
-- **Bill-only finalize** — billing writes `billing_bills` + lines only; stock and khata are separate GO objectives (5.3).
-- **Oversell guard** — finalize reads `on_hand − active_reservations`; refusal via `refusalMessage`.
-- **Invoice artifact** — PDF attachment on `ExecutionResult.attachments` when `artifactsEnabled` (shop profile, default true). See Component 5.5 for Browser Run pipeline.
-- **Dummy bill** — `start_bill` with shop customer + `set_notes` for loose-pack write-offs (C52-007).
-
-### Eval
-
-1. `wrangler deploy` (applies migration `0005_component_5_2_billing`)
-2. `npm run eval` (C52 rows in `evaluationqueries.csv`)
-3. Human Pass on W1 (multi-objective sale trace) and W2 (oversell with reservation)
-
-## Component 5.3 — Khata & sale orchestration
-
-Component 5.3 adds the Khata BC (`query_khata`, `manage_khata_transaction`), `commit_bill_sale` in Inventory, and GO **sale collaboration invariant** (same-turn replan when post-finalize objectives are missing).
-
-**Sale business operation** (typical cash sale):
+`orchestrate()` runs until the request is done or the round cap hits:
 
 ```text
-inventory (query) → billing (finalize) → inventory (commit_bill_sale)
+assemble context
+  → plan capabilities (Gemini)
+  → verify plan (code)
+  → run the full plan (code, no LLM inside)
+  → decide: replan, clarify, or respond (Gemini)
+  → on respond: write answer + check fact bindings (code)
 ```
 
-Khata payment adds a fourth objective: `khata (record_credit_from_bill)` depending on billing.
+The execution engine finishes the whole plan before Decision Mode runs. If one objective needs clarification, independent objectives still run. Blocked dependents get skipped. There is no half-plan-then-decide path. Incomplete work means Decision picks `replan` and a new plan version.
 
-- **Read/write boundaries** — billing never writes inventory or khata; each BC owns its tables.
-- **Khata writes** always confirmed; never auto-create customer (confirmation instead).
-- **Cross-objective facts** — dependent objectives receive `priorObjectiveResults` from completed billing.
+Two ways to replan. They are not the same thing.
 
-### Eval
 
-1. `wrangler deploy` (applies migration `0006_component_5_3_khata_orchestration`)
-2. `npm run eval` (C53 + amended C52 rows)
-3. Human Pass on W1–W4 and W7 minimum (see plan walkthroughs)
+|                      | When                                   | What it fixes                                                                                |
+| -------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Harness retry**    | Plan JSON fails verification           | The plan shape. Retries immediately. Skips Decision.                                         |
+| **Strategic replan** | Objectives ran but the job is not done | The mapping from intent to objectives. Decision sends prior plan + results back to Planning. |
 
-## Component 5.4 — Analytics
 
-Component 5.4 replaces the analytics unavailable stub with a **direct deterministic executor** (no Capability blueprint / no inner Gemini). Single tool: `generate_analytics` (zero parameters) — always produces the full six-period IST analysis.
+Harness retry caps (`MAX_GO_PLAN_VERIFY_RETRIES`) are separate from strategic round caps (`MAX_GO_GEMINI_ROUNDS`).
 
-- **Read-only** — aggregates billing, inventory, and khata tables via `analytics-repository.ts`; never writes business data.
-- **Chat summary** — daily scalars in `verifiedFacts` for faithfulness (~5–6 lines).
-- **HTML artifact** — premium report with SVG charts; **always attached** when ≥1 finalized bill exists. **Ignores** `shop_profile.artifactsEnabled` (billing gate does not apply).
-- **Empty shop** — `completed` + `refusalMessage`; no attachment, no invented figures.
-- **`AnalysisSnapshot`** — shared type for 5.5 PPTX template (do not duplicate SQL in 5.5).
+### Business capabilities
 
-> **Superseded by 5.5:** Telegram delivery is **PPTX** (not HTML). `render-analysis-html.ts` remains for dev/unit tests only.
+Each capability (inventory, billing, khata, etc.) runs a smaller version of the same loop: plan tools, verify, execute, return results. One GO call, one BC pass. BCs do not own the strategic replan loop. They hand evidence back to GO.
 
-### Eval
+BC harness retry only covers bad tool plans and parameter grounding before execution. Example: inventory must call `query_inventory` before `update_inventory`. Plan verification and the tool-result map enforce that. The prompt does not ask the model to remember.
 
-1. `wrangler deploy`
-2. `npm run eval` (C54 rows in `evaluationqueries.csv`)
-3. Human Pass on W1–W5 minimum (daily sales, close the day, weekly deck phrasing, empty shop, narrow GST question)
+### How capabilities collaborate
 
-## Component 5.5 — Artifact generator (PDF + PPTX)
+Each capability owns its writes. Inventory owns stock and movements. Billing owns bills. Khata owns the credit ledger. A capability may read another domain's tables when it needs source-of-truth data. Billing reads `quantity_on_hand` to refuse oversell. It does not decrement stock. That is inventory's job.
 
-Component 5.5 adds production artifacts via two canonical renderers in `src/artifact/`:
+**The sale refactor (5.2 → 5.3).** First working billing stuffed everything into one transaction. `finalizeBillTransaction` wrote the bill, decremented stock, and inserted khata rows in the same function. It worked in demos. It broke ownership. Stock logic lived inside billing. Khata customers were auto-created on finalize. You could not trace which subsystem made which change, and you could not replan a missing step because the work had already happened silently.
 
-| Deliverable | Engine | Telegram MIME |
-|-------------|--------|----------------|
-| GST invoice | Cloudflare **Browser Run** `quickAction("pdf")` from internal HTML template | `application/pdf` |
-| Sales analysis deck | **PptxGenJS** from `AnalysisSnapshot` (parameter-only) | `application/vnd...presentationml.presentation` |
+We locked the rule in `system_Architecture.md`: capabilities own their writes; business operations may span capabilities. Billing finalize now writes bill rows only. Stock drops in inventory's `commit_bill_sale`. Udhar posts in khata's `record_credit_sale`. Each step is a separate GO objective with explicit dependencies. Billing passes facts forward (`bill_id`, `payment_method`, line items). The dependent capability reads those facts. It does not reach into another module's repository.
 
-- **Never HTML to Telegram** — invoice HTML is compile-only input for PDF; no `text/html` billing/analytics attachments.
-- **Billing gate** — `generateArtifact !== false` and `shop_profile.artifactsEnabled !== false`.
-- **Analytics gate** — PPTX always when bills exist; ignores `artifactsEnabled`.
-- **On-demand PDF** — `query_bill` operation `render_invoice_pdf` regenerates from SQLite.
-- **Traces** — `ARTIFACT_GENERATED` (DO, metadata only) and `ARTIFACT_DELIVERED` (Worker after `sendDocument`).
-- **Wrangler** — `[browser]` binding + `compatibility_date >= 2026-03-24`; Browser Run billed separately (browser-hours).
+Owner says: *"bill 5 Maggi on Ramesh's khata"*
 
-### Eval
+```text
+inventory   query_inventory          (resolve SKU)
+billing     finalize_bill            (bill rows only; reads stock for oversell check)
+inventory   commit_bill_sale         (depends on billing; writes sale movement)
+khata       record_credit_sale       (depends on billing; payment is khata)
+```
 
-1. `wrangler deploy` (enable Browser Run on account)
-2. `npm run eval:5.5` (or full `npm run eval` for C55 rows)
-3. Human Pass: open PDF (GST table legible); open PPTX (charts render); `invoice_attached` / `analysis_attached` facts in traces
+Owner says: *"put ₹500 on Ramesh's credit"*
 
-## Component 5.0 evaluation
+```text
+khata       manage_khata_transaction (manual_credit)
+```
 
-The 5.0 eval spine uses the **deployed Worker webhook → Store Durable Object** path (same as production). Traces in `agent_trace_events` are the evidence — not HTTP 200, not manual Telegram chat reading.
+No billing. No inventory. The planner decides which capabilities join. The harness runs them in dependency order and passes verified facts between them.
 
-### Prerequisites
+Owner says: *"today's sales"*
 
-1. `wrangler deploy` with `GEMINI_API_KEY` set on the Worker
-2. Copy `.dev.vars.example` → `.dev.vars` with `WORKER_WEBHOOK_URL`, `WEBHOOK_SECRET`
-3. Run: `npm run eval:5.0`
+```text
+analytics   generate_analytics       (no parameters, no inner planner)
+```
 
-The script posts each row in `queries-5.0.csv`, waits async DO processing (default 30s per query; override with `EVAL_WAIT_MS`), and prints `update_id` values for trace export.
+Here the collaboration pattern is fixed. Analytics always reads billing, inventory, and khata through one repository. No tool plan, no second LLM inside the capability. GO routes to `analytics`; code does the rest.
 
-### Trace audit
+**Sale collaboration invariant.** If billing finalized but the plan skipped `commit_bill_sale` (or khata on an udhar bill), `checkSaleCollaborationInvariant` blocks Decision and forces a same-turn replan. Agent state is gone after the reply sends. The owner should not have to message again because the planner forgot a post-finalize step.
 
-1. Export traces from the DO SQL console (same workflow as `explain your capabilities.csv`)
-2. Run `sql/agent-trace.sql` per printed `update_id`
-3. Score against rubric dimensions: routing, status honesty (`not_supported` / `unavailable` / `clarification_needed`), Decision action (`replan` / `ask_user` / `respond`), response grounding, no wrong writes
+**Inside each capability, code runs first.** Billing resolves draft focus and replays the event log before the tool planner sees the request. Draft truth is `billing_draft_events`, not chat memory. Inventory writes resolve SKU from the last exact `query_inventory` match in agent state, not from a model-guessed id.
 
-Walkthrough references: W1 (C50-001 inventory update), W2 (C50-002 stock check), W4 (C50-004 GST ask_user), W5 (C50-005 capabilities — no invented system capabilities).
+---
 
-### Known gaps (5.0)
+## Capabilities
 
-- Meta questions ("what can you do?") — future `system_understanding` system capability (README note only)
-- PDF delivery — production pipeline in 5.5 (`Browser Run` + `PDF-01` transport test)
-- Eval ≠ manual Telegram smoke testing; Telegram delivery during eval is an acceptable side effect
 
-## Operations
+| Capability     | Owns                           | Rule that matters                                                  |
+| -------------- | ------------------------------ | ------------------------------------------------------------------ |
+| `user_profile` | Shop name, GSTIN, reply prefs  | Confirmed writes only                                              |
+| `inventory`    | Stock, reservations, movements | No stock decrease on register/update; sales use `commit_bill_sale` |
+| `billing`      | Drafts, GST, finalized bills   | Oversell check at finalize: `on_hand` minus active reservations    |
+| `khata`        | Credit ledger                  | Confirmed writes; no auto-create customer                          |
+| `analytics`    | Sales and stock summaries      | Read only; PPTX from `AnalysisSnapshot`                            |
 
-See **[running.md](running.md)** for deploy, secrets, webhook registration, production validation, and `wrangler tail`.
+
+Credit and destructive writes wait for Telegram confirmation (`callback_query`). When something is ambiguous, Decision picks `clarify` and the model asks. No regex router behind it.
+
+PDF invoices: Browser Run on internal HTML. Analysis deck: PptxGenJS. File bytes never enter the LLM.
+
+---
+
+## Context, harness, loop
+
+Three separate design problems. Not three prompt layers.
+
+**Context engineering** is what each LLM call sees. Agent state is the full run (in-memory `RunContext` plus persisted `agent_trace_events`). Each call gets a slice. Decision sees objective results after execution finishes, not raw tool logs. BC re-invoke gets the prior tool plan plus prior results. Without the original plan, feedback is useless. Gemini thinking stays in the trace. It does not feed the next step.
+
+**Harness engineering** is the code around the model. Phase gates. Plan verification. Tool parameter contracts. Dependency scheduler. Confirmations. Fact registry. Binding verifier. Ledger. Traces. Invariants live here. Prompts set role boundaries. They do not list recipes like "always finalize before commit."
+
+**Loop engineering** is who retries what. GO owns the strategic loop. BCs retry bad tool plans only. One plan-verify-execute pattern. One strategic control loop at the top.
+
+**Faithfulness:** an NL claim extractor rejected correct answers (`name` vs `shopName`). Response generation now attaches fact bindings when it writes the answer. Code checks those bindings against the Verified Fact Registry. Do not verify natural language with natural language.
+
+---
+
+## Hard parts
+
+
+| Problem              | Where it is enforced                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| Grounding            | Tools return facts. Response binds to them. Code verifies before send.                   |
+| Oversell             | `finalize_bill` refuses. Stock moves in `commit_bill_sale` only.                         |
+| GST                  | Per-line HSN and slab in SQLite. CGST/SGST in billing executor. Breakup on bill and PDF. |
+| Multi-turn bills     | Append-only draft events. Stock moves on finalize.                                       |
+| Idempotency          | `execution_ledger` per `update_id`. Reservations carry `idempotency_key`.                |
+| Concurrency          | Single-threaded DO per owner.                                                            |
+| Guardrails           | Below-cost refused. Khata needs existing customer. Writes confirmed.                     |
+| Artifacts            | PDF invoice and PPTX deck from agent tools.                                              |
+| Memory across `/new` | `shop_profile` and instruction prefs load from SQLite, not chat history.                 |
+
+
+---
+
+## What traces taught us
+
+Debug with `agent_trace_events` and [sql/agent-trace.sql](sql/agent-trace.sql) per `update_id`. HTTP 200 and tail logs are not enough.
+
+- BC re-invoke was blind without the prior tool plan. Fixed with `bcInvocationLog` and reinvoke context slices in `RunContext`.
+- Model called `set_customer` when the owner said finalize. Billing planner now treats drafting and finalizing as different outcomes.
+- Tool parameter contracts validate shape and types before execution. Bad plans fail before SQLite writes.
+
+Eval: `npm run eval` (webhook to DO, then audit traces). Deploy and ops: [running.md](running.md). Full design: [docs/system_Architecture.md](docs/system_Architecture.md).
+
+**Gaps:** no system capability for "what can you do?" yet. Browser Run is billed separately from Workers.

@@ -1,0 +1,8 @@
+name = "kirana-browser-pdf-smoke"
+main = "browser-pdf-smoke-worker.ts"
+compatibility_date = "2026-03-24"
+compatibility_flags = ["nodejs_compat_v2"]
+
+[browser]
+binding = "BROWSER"
+remote = true

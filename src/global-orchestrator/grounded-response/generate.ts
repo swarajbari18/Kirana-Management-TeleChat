@@ -38,6 +38,7 @@ Rules:
 7. Do not state outcomes beyond execution evidence and Decision rationale. Do not invent system capabilities.
 8. Prose-only lines (greetings) may have empty bindings only when they state no facts.
 9. For denied writes, use outcomeBindings instead of fact bindings.
+10. Fields ending in _paise are integer paise in the catalog value; show rupees in display (e.g. ₹504.00). asShown must match the catalog value (paise integer) or the same rupee amount with ₹ prefix.
 
 Fact Catalog:
 {fact_catalog_json}

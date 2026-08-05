@@ -137,7 +137,7 @@ export async function finalizeBill(
       params.generateArtifact !== false && profile.artifactsEnabled !== false;
 
     let invoiceAttached = false;
-    let artifactRefusal: string | undefined;
+    let artifactRenderDiagnostic: string | undefined;
 
     if (generateArtifact && bill) {
       try {
@@ -154,8 +154,7 @@ export async function finalizeBill(
         invoiceAttached = true;
       } catch (error) {
         if (error instanceof ArtifactRenderError) {
-          artifactRefusal =
-            "Bill finalized, but the invoice PDF could not be generated.";
+          artifactRenderDiagnostic = error.message;
         } else {
           throw error;
         }
@@ -191,9 +190,11 @@ export async function finalizeBill(
         billId: toolCtx.billId,
         finalized: true,
         attachmentCount: attachments.length,
+        ...(artifactRenderDiagnostic
+          ? { artifactRenderDiagnostic }
+          : {}),
       },
       attachments,
-      refusalMessage: artifactRefusal,
     };
   };
 

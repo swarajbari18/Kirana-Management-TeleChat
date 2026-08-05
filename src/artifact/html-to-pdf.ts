@@ -15,26 +15,37 @@ export async function htmlToPdf(
   const response = await browser.quickAction("pdf", {
     html,
     pdfOptions: {
-      format: options.format ?? "A4",
+      format: options.format ?? "a4",
       printBackground: options.printBackground ?? true,
     },
   });
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new ArtifactRenderError(
-      "pdf_render_failed",
-      `Browser Run PDF failed (${response.status}): ${body.slice(0, 200)}`,
+    const detail = `Browser Run PDF failed (${response.status}): ${body.slice(0, 200)}`;
+    console.log(
+      JSON.stringify({
+        layer: "runtime",
+        action: "browser_pdf_render_failed",
+        status: response.status,
+        detail,
+      }),
     );
+    throw new ArtifactRenderError("pdf_render_failed", detail);
   }
 
   const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   if (!isPdfBytes(bytes)) {
-    throw new ArtifactRenderError(
-      "pdf_render_failed",
-      "Browser Run output is not a valid PDF",
+    const detail = "Browser Run output is not a valid PDF";
+    console.log(
+      JSON.stringify({
+        layer: "runtime",
+        action: "browser_pdf_render_failed",
+        detail,
+      }),
     );
+    throw new ArtifactRenderError("pdf_render_failed", detail);
   }
 
   return bytes;

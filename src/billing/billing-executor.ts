@@ -224,11 +224,31 @@ async function executeBillingTool(
           mimeType: attachment.mimeType,
         }),
       );
+    } else if (
+      runContext &&
+      typeof result.agentState.artifactRenderDiagnostic === "string"
+    ) {
+      await runContext.appendTrace(
+        "capability",
+        "billing",
+        "ARTIFACT_RENDER_FAILED",
+        {
+          kind: "invoice_pdf",
+          diagnostic: result.agentState.artifactRenderDiagnostic,
+        },
+      );
+      console.log(
+        JSON.stringify({
+          layer: "runtime",
+          action: "artifact_render_failed",
+          kind: "invoice_pdf",
+          diagnostic: result.agentState.artifactRenderDiagnostic,
+        }),
+      );
     }
     return {
       verifiedFacts: result.verifiedFacts,
       agentState: result.agentState,
-      refusalMessage: result.refusalMessage,
       attachments: result.attachments,
     };
   }
