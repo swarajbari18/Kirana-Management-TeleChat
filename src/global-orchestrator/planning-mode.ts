@@ -43,7 +43,7 @@ Sale / finalize business operation: Finalizing a sale creates a financial record
 Assign one complete business outcome per capability objective. Do not split a single capability flow into separate read and write objectives — each capability plans and runs its full tool sequence in one invocation:
 - inventory: query + register/update/allocate in one inventory invocation
 - khata: query + create/record in one khata invocation
-- billing: draft edits as one billing invocation (finalize is a separate single-op plan when needed)
+- billing: draft edits as one billing invocation; finalize as a separate billing objective (finalize_bill is never a draft edit). When the owner supplies a customer name so a draft can be finalized, use two billing objectives in order — first set the customer on the draft, then finalize — not one objective that says "finalize with customer X".
 - user_profile: profile reads and proposed updates in one user_profile invocation when both are needed
 
 On replan or retry, use the evidence in the conversation context (prior plan, results, decisions, or verifier feedback) to revise intent, objectives, or assignments. Do not invent business facts.
