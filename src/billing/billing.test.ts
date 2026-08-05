@@ -283,6 +283,40 @@ describe("BILL-RESOLVE-02", () => {
   });
 });
 
+describe("BILL-RESOLVE-03", () => {
+  it("draftTarget new reuses planBillId for follow-on ops in same plan", async () => {
+    const start = await resolveDraftFocus(
+      {} as never,
+      {},
+      { objectiveId: "o1", description: "new bill", draftTarget: "new" },
+      "start_bill",
+    );
+    expect(start.createNew).toBe(true);
+    expect(start.billId).toBeDefined();
+
+    const addItem = await resolveDraftFocus(
+      {} as never,
+      {},
+      { objectiveId: "o1", description: "new bill", draftTarget: "new" },
+      "add_item",
+      { planBillId: start.billId },
+    );
+    expect(addItem.createNew).toBe(false);
+    expect(addItem.billId).toBe(start.billId);
+  });
+
+  it("draftTarget new without start_bill clarifies", async () => {
+    await expect(
+      resolveDraftFocus(
+        {} as never,
+        {},
+        { objectiveId: "o1", description: "new bill", draftTarget: "new" },
+        "add_item",
+      ),
+    ).rejects.toThrow(/start_bill/);
+  });
+});
+
 describe("plan verification mutex", () => {
   it("rejects finalize mixed with mutating draft ops", () => {
     const result = verifyToolPlan({

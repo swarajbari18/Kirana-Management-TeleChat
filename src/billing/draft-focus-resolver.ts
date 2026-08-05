@@ -15,6 +15,11 @@ export interface DraftFocusResolution {
   createNew: boolean;
 }
 
+/** Bill id established by start_bill earlier in the same BC tool plan. */
+export interface DraftFocusPlanContext {
+  planBillId?: string;
+}
+
 function formatDraftLabel(summary: OpenDraftSummary): string {
   const customer = summary.customerName ?? "No customer";
   return `${customer} — ${summary.lineCount} line(s), last edited ${summary.lastEventAt}`;
@@ -44,11 +49,25 @@ export async function resolveDraftFocus(
   params: Record<string, unknown>,
   objective: BusinessObjective,
   operation: string,
+  planContext?: DraftFocusPlanContext,
 ): Promise<DraftFocusResolution> {
   const draftTarget = resolveEffectiveDraftTarget(params, objective);
 
-  if (draftTarget === "new" || operation === "start_bill") {
+  if (operation === "start_bill") {
     return { billId: crypto.randomUUID(), draftTarget, createNew: true };
+  }
+
+  if (draftTarget === "new") {
+    if (planContext?.planBillId) {
+      return {
+        billId: planContext.planBillId,
+        draftTarget,
+        createNew: false,
+      };
+    }
+    throw new ClarificationError(
+      "New bill flow requires start_bill before this operation.",
+    );
   }
 
   if (draftTarget === "by_customer") {

@@ -21,7 +21,7 @@ import type {
 import { buildOpenDraftSummaries } from "../store-durable-object/persistence/repositories/billing-repository.js";
 import { formatOpenDraftsSummaryForContext } from "./draft-focus-resolver.js";
 import { loadDraftProjection } from "./draft-projection.js";
-import { resolveDraftFocus } from "./draft-focus-resolver.js";
+import { resolveDraftFocus, type DraftFocusPlanContext } from "./draft-focus-resolver.js";
 import { validateOperationAgainstStateMachine } from "./draft-state-machine.js";
 import {
   finalizeBill,
@@ -102,6 +102,7 @@ async function executeBillingTool(
   runtimePorts: RuntimePorts,
   db: StoreDatabase,
   objective: BusinessObjective,
+  planContext: DraftFocusPlanContext,
   runContext?: RunContext,
 ): Promise<ToolStepResult> {
   const toolCtxBase = {
@@ -153,7 +154,13 @@ async function executeBillingTool(
 
   if (step.toolName === "manage_draft_bill") {
     const operation = step.parameters.operation as ManageDraftOperation;
-    const focus = await resolveDraftFocus(db, step.parameters, objective, operation);
+    const focus = await resolveDraftFocus(
+      db,
+      step.parameters,
+      objective,
+      operation,
+      planContext,
+    );
     const projection =
       focus.billId && !focus.createNew
         ? await loadDraftProjection(db, focus.billId)
@@ -191,6 +198,7 @@ async function executeBillingTool(
       step.parameters,
       objective,
       "finalize_bill",
+      planContext,
     );
     if (!focus.billId) {
       throw new Error("No draft resolved for finalize_bill");
@@ -354,6 +362,7 @@ export function createBillingExecutor(
         userMessage: ctx.inbound.text,
         priorObjectiveResults: objective.priorObjectiveResults,
       };
+      let planBillId: string | undefined;
 
       for (const step of ordered) {
         let groundingAttempt = 0;
@@ -465,6 +474,7 @@ export function createBillingExecutor(
             step.parameters,
             objective,
             operation,
+            { planBillId },
           );
           const projection =
             focus.billId && !focus.createNew
@@ -485,8 +495,17 @@ export function createBillingExecutor(
           runtimePorts,
           db,
           objective,
+          { planBillId },
           runContext,
         );
+
+        if (
+          step.toolName === "manage_draft_bill" &&
+          step.parameters.operation === "start_bill" &&
+          typeof toolResult.agentState.billId === "string"
+        ) {
+          planBillId = toolResult.agentState.billId;
+        }
 
         l1ToolResults.byOperationId.set(step.operationId, toolResult.agentState);
         l1ToolResults.byToolName.set(step.toolName, toolResult.agentState);

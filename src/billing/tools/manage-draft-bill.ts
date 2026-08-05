@@ -417,13 +417,20 @@ export async function prepareManageDraftContext(
   db: StoreDatabase,
   params: Record<string, unknown>,
   objective: BusinessObjective,
+  planContext?: { planBillId?: string },
 ): Promise<{
   billId: string;
   projection: DraftProjection | null;
   createNew: boolean;
 }> {
   const operation = params.operation as ManageDraftOperation;
-  const focus = await resolveDraftFocus(db, params, objective, operation);
+  const focus = await resolveDraftFocus(
+    db,
+    params,
+    objective,
+    operation,
+    planContext,
+  );
   const projection =
     focus.billId && !focus.createNew
       ? await loadDraftProjection(db, focus.billId)
@@ -434,10 +441,6 @@ export async function prepareManageDraftContext(
     projection,
     focus.createNew,
   );
-
-  if (focus.createNew && focus.billId && operation !== "start_bill") {
-    validateOperationAgainstStateMachine(operation, null, false);
-  }
 
   return {
     billId: focus.billId ?? crypto.randomUUID(),

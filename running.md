@@ -60,7 +60,7 @@ Use the full URL with `/webhook` path. Values from `.dev.vars`:
 curl "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
   -d "url=<WORKER_WEBHOOK_URL>" \
   -d "secret_token=<WEBHOOK_SECRET>" \
-  -d "allowed_updates=[\"message\"]"
+  -d "allowed_updates=[\"message\",\"callback_query\"]"
 ```
 
 Example `WORKER_WEBHOOK_URL`:
