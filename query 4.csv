@@ -1,5 +1,0 @@
-sku,product_name,inventory_sell_rupees,inventory_cost_rupees,bill_line_sell_price_paise,quantity,unit,taxable_paise,line_total_paise,unit_check
-loose-sugar-001,loose sugar,45,40,45,2,kg,90,90,BUG: rupees copied as paise
-aashirvaad-atta-5kg-001,Aashirvaad Atta 5kg,280,250,280,1,packet,280,280,BUG: rupees copied as paise
-maggi-70g-001,Maggi 70g,14,12,14,4,packet,56,64,BUG: rupees copied as paise
-amul-butter-100g-001,Amul Butter 100g,62,52,62,1,packet,62,70,BUG: rupees copied as paise

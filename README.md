@@ -4,8 +4,7 @@
 |                    |                                              |
 | ------------------ | -------------------------------------------- |
 | **Bot**            | `@username` *(fill after deploy)*            |
-| **Demo recording** | *(link to 4-5 min walkthrough)*              |
-| **Demo script**    | [docs/demo-queries.md](docs/demo-queries.md) |
+| **Demo recording** | *https://www.loom.com/share/826609c6a2094e0db1d0694c552c3a5a*              |
 
 
 ---

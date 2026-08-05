@@ -1,2 +1,0 @@
-update_id,queue_status,started_at,completed_at,correlation_id,terminal_status,telegram_delivered,failure_reason,result_json_len
-261541151,completed,2026-08-05T02:26:28.449Z,2026-08-05T02:27:20.958Z,a340ff82-d4dd-4164-afeb-66b1f82a6a88,ok,1,,225
