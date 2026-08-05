@@ -9,6 +9,9 @@ import type { RunContext } from "../store-durable-object/agent-state/run-context
 import type { RuntimePorts } from "../store-durable-object/runtime-ports/types.js";
 import type { StoreDatabase } from "../store-durable-object/persistence/db.js";
 import type { CapabilityResult, StructuredToolPlan } from "./types.js";
+import type { ToolPlanVerifyContext } from "./tool-plan-verify-context.js";
+import type { ParameterGroundingContext } from "./parameter-grounding-context.js";
+import { mergeToolVerifiedFacts } from "./verified-facts-merge.js";
 
 export interface ToolPlanVerificationResult {
   valid: boolean;
@@ -57,16 +60,82 @@ export interface CapabilityBlueprintConfig {
   id: string;
   kind: "system" | "business";
   toolPlannerSystemPrompt: string;
-  verifyToolPlan: (plan: StructuredToolPlan) => ToolPlanVerificationResult;
+  verifyToolPlan: (
+    plan: StructuredToolPlan,
+    context?: ToolPlanVerifyContext,
+  ) => ToolPlanVerificationResult;
   sortByDependencies: (
     steps: StructuredToolPlan["operations"],
   ) => StructuredToolPlan["operations"];
   parameterGroundingCheck: (
-    objectiveDescription: string,
+    context: ParameterGroundingContext,
     step: StructuredToolPlan["operations"][number],
   ) => ParameterGroundingResult;
   executeTool: ToolExecutor;
   mapToolError: (error: unknown) => CapabilityResult;
+}
+
+function seedL1FromPriorBcInvocation(
+  runContext: RunContext,
+  capabilityId: string,
+  plan: StructuredToolPlan,
+  l1ToolResults: AgentStatePriorResults,
+): void {
+  if (l1ToolResults.byToolName.has("query_inventory")) {
+    return;
+  }
+
+  const writeOp = plan.operations.find((op) =>
+    ["register_inventory", "update_inventory", "allocate_inventory"].includes(
+      op.toolName,
+    ),
+  );
+  if (!writeOp) {
+    return;
+  }
+
+  const productName =
+    typeof writeOp.parameters.product_name === "string"
+      ? writeOp.parameters.product_name
+      : undefined;
+
+  const prior = runContext.findPriorQueryAgentState(
+    capabilityId,
+    productName,
+    writeOp.toolName as
+      | "register_inventory"
+      | "update_inventory"
+      | "allocate_inventory",
+  );
+  if (prior) {
+    l1ToolResults.byToolName.set("query_inventory", prior);
+  }
+}
+
+function storeInvocationMeta(
+  runContext: RunContext,
+  objective: BusinessObjective,
+  capabilityId: string,
+  plan: StructuredToolPlan,
+  result: CapabilityResult,
+  toolExecutions: import("../store-durable-object/agent-state/run-context.js").BcToolExecutionRecord[],
+): void {
+  runContext.storeBcInvocation(objective.objectiveId, plan, result, {
+    capabilityId,
+    objectiveDescription: objective.description,
+    toolExecutions,
+  });
+}
+
+function buildGroundingContext(
+  ctx: OrchestrationContext,
+  objective: BusinessObjective,
+): ParameterGroundingContext {
+  return {
+    objectiveDescription: objective.description,
+    userMessage: ctx.inbound.text,
+    priorObjectiveResults: objective.priorObjectiveResults,
+  };
 }
 
 async function planTools(
@@ -127,6 +196,7 @@ export function createCapabilityExecutor(
       let verification: ToolPlanVerificationResult = { valid: false };
       let harnessAttempt = 0;
       let lastDiagnostic: string | undefined;
+      const verifyContext = runContext?.buildToolPlanVerifyContext(config.id);
 
       while (harnessAttempt < MAX_BC_TOOL_PLAN_VERIFY_RETRIES) {
         const llmTrace = await planTools(
@@ -159,7 +229,7 @@ export function createCapabilityExecutor(
         }
 
         plan = llmTrace.result;
-        verification = config.verifyToolPlan(plan);
+        verification = config.verifyToolPlan(plan, verifyContext);
 
         if (verification.valid) {
           if (runContext) {
@@ -222,11 +292,23 @@ export function createCapabilityExecutor(
         byOperationId: new Map(),
         byToolName: new Map(),
       };
+      const invocationToolExecutions: import("../store-durable-object/agent-state/run-context.js").BcToolExecutionRecord[] =
+        [];
+      const groundingContext = buildGroundingContext(ctx, objective);
+
+      if (runContext) {
+        seedL1FromPriorBcInvocation(
+          runContext,
+          config.id,
+          plan,
+          l1ToolResults,
+        );
+      }
 
       for (const step of ordered) {
         let groundingAttempt = 0;
         let grounding = config.parameterGroundingCheck(
-          objective.description,
+          groundingContext,
           step,
         );
 
@@ -274,7 +356,7 @@ export function createCapabilityExecutor(
           }
 
           plan = llmTrace.result;
-          const reverify = config.verifyToolPlan(plan);
+          const reverify = config.verifyToolPlan(plan, verifyContext);
           if (!reverify.valid) {
             const emptyPlan =
               !plan?.operations || plan.operations.length === 0;
@@ -300,7 +382,7 @@ export function createCapabilityExecutor(
           );
           if (retriedStep) {
             grounding = config.parameterGroundingCheck(
-              objective.description,
+              groundingContext,
               retriedStep,
             );
           } else {
@@ -334,7 +416,14 @@ export function createCapabilityExecutor(
 
         l1ToolResults.byOperationId.set(step.operationId, toolResult.agentState);
         l1ToolResults.byToolName.set(step.toolName, toolResult.agentState);
-        Object.assign(facts, toolResult.verifiedFacts);
+        invocationToolExecutions.push({
+          operationId: step.operationId,
+          toolName: step.toolName,
+          parameters: step.parameters,
+          agentState: toolResult.agentState,
+          verifiedFacts: toolResult.verifiedFacts,
+        });
+        mergeToolVerifiedFacts(facts, step, toolResult.verifiedFacts);
         if (toolResult.attachments?.length) {
           attachments.push(...toolResult.attachments);
         }
@@ -363,14 +452,13 @@ export function createCapabilityExecutor(
             attachments: attachments.length > 0 ? attachments : undefined,
           };
           if (runContext) {
-            runContext.storeBcInvocation(
-              objective.objectiveId,
+            storeInvocationMeta(
+              runContext,
+              objective,
+              config.id,
               plan,
               refusalResult,
-              {
-                capabilityId: config.id,
-                objectiveDescription: objective.description,
-              },
+              invocationToolExecutions,
             );
           }
           return refusalResult;
@@ -378,18 +466,17 @@ export function createCapabilityExecutor(
       }
 
       if (runContext) {
-        runContext.storeBcInvocation(
-          objective.objectiveId,
+        storeInvocationMeta(
+          runContext,
+          objective,
+          config.id,
           plan,
           {
             status: "completed",
             verifiedFacts: facts,
             attachments: attachments.length > 0 ? attachments : undefined,
           },
-          {
-            capabilityId: config.id,
-            objectiveDescription: objective.description,
-          },
+          invocationToolExecutions,
         );
       }
 

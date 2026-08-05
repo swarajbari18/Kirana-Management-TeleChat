@@ -177,11 +177,17 @@ export async function manageKhataTransaction(
       throw new ClarificationError("customer_name is required for create_customer.");
     }
 
-    const existing = await searchCustomersExact(db, canonicalName);
-    if (existing.length > 0) {
+    const priorQuery = getPriorQueryKhataResult(priorResults);
+    if (!priorQuery) {
+      throw new Error(
+        "Invariant violation: create_customer requires prior query_khata",
+      );
+    }
+
+    if (priorQuery.exactMatchCount >= 1) {
       throw new ClarificationError(
-        `Customer already exists: ${existing[0]!.canonicalName}`,
-        { exactMatches: existing },
+        `Customer already exists: ${priorQuery.exactMatches[0]!.canonicalName}. Use record_manual_credit or record_payment instead.\n${formatExactCustomersMessage(priorQuery.exactMatches)}`,
+        { exactMatches: priorQuery.exactMatches },
       );
     }
 

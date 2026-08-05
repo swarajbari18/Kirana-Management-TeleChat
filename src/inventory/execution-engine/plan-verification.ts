@@ -1,4 +1,8 @@
 import type { StructuredToolPlan, ToolPlanStep } from "../../capability-registry/types.js";
+import type {
+  PriorBcQueryState,
+  ToolPlanVerifyContext,
+} from "../../capability-registry/tool-plan-verify-context.js";
 
 export interface ToolPlanVerificationResult {
   valid: boolean;
@@ -34,28 +38,87 @@ const VALID_UNITS = new Set([
 ]);
 const VALID_ALLOCATE_OPS = new Set(["reserve", "commit", "release"]);
 
+function normalizeProductName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function productNameFromWriteOp(op: ToolPlanStep): string | undefined {
+  if (typeof op.parameters.product_name === "string") {
+    return op.parameters.product_name;
+  }
+  return undefined;
+}
+
+function hasPriorQueryInAgentState(
+  writeTool: ToolPlanStep["toolName"],
+  productName: string | undefined,
+  priorStates: PriorBcQueryState[],
+): boolean {
+  const normalizedTarget = productName?.trim().toLowerCase();
+
+  for (let i = priorStates.length - 1; i >= 0; i--) {
+    const entry = priorStates[i]!;
+    if (
+      normalizedTarget &&
+      entry.productName &&
+      normalizeProductName(entry.productName) !== normalizedTarget
+    ) {
+      continue;
+    }
+
+    const exactMatchCount = Number(
+      (entry.agentState as { exactMatchCount?: number }).exactMatchCount ?? -1,
+    );
+
+    if (writeTool === "register_inventory" && exactMatchCount === 0) {
+      return true;
+    }
+    if (
+      (writeTool === "update_inventory" ||
+        writeTool === "allocate_inventory") &&
+      exactMatchCount === 1
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function hasPriorQueryInventory(
   operations: ToolPlanStep[],
   targetOp: ToolPlanStep,
+  context?: ToolPlanVerifyContext,
 ): boolean {
   const queryOps = operations.filter((op) => op.toolName === "query_inventory");
-  if (queryOps.length === 0) {
-    return false;
+  if (queryOps.length > 0) {
+    const ordered = sortByDependencies(operations);
+    const targetIndex = ordered.findIndex(
+      (op) => op.operationId === targetOp.operationId,
+    );
+    if (targetIndex > 0) {
+      const prior = ordered.slice(0, targetIndex);
+      if (prior.some((op) => op.toolName === "query_inventory")) {
+        return true;
+      }
+    }
   }
 
-  const ordered = sortByDependencies(operations);
-  const targetIndex = ordered.findIndex(
-    (op) => op.operationId === targetOp.operationId,
-  );
-  if (targetIndex <= 0) {
-    return false;
+  if (context?.priorQueryAgentStates.length) {
+    return hasPriorQueryInAgentState(
+      targetOp.toolName,
+      productNameFromWriteOp(targetOp),
+      context.priorQueryAgentStates,
+    );
   }
 
-  const prior = ordered.slice(0, targetIndex);
-  return prior.some((op) => op.toolName === "query_inventory");
+  return false;
 }
 
-export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationResult {
+export function verifyToolPlan(
+  plan: StructuredToolPlan,
+  context?: ToolPlanVerifyContext,
+): ToolPlanVerificationResult {
   const diagnostics: string[] = [];
 
   if (!plan.operations || plan.operations.length === 0) {
@@ -100,7 +163,7 @@ export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationRe
     }
 
     if (op.toolName === "register_inventory") {
-      if (!hasPriorQueryInventory(plan.operations, op)) {
+      if (!hasPriorQueryInventory(plan.operations, op, context)) {
         diagnostics.push(
           "query_inventory is a required dependency of register_inventory",
         );
@@ -138,7 +201,7 @@ export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationRe
     }
 
     if (op.toolName === "update_inventory") {
-      if (!hasPriorQueryInventory(plan.operations, op)) {
+      if (!hasPriorQueryInventory(plan.operations, op, context)) {
         diagnostics.push(
           "query_inventory is a required dependency of update_inventory",
         );
@@ -157,7 +220,7 @@ export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationRe
     }
 
     if (op.toolName === "allocate_inventory") {
-      if (!hasPriorQueryInventory(plan.operations, op)) {
+      if (!hasPriorQueryInventory(plan.operations, op, context)) {
         diagnostics.push(
           "query_inventory is a required dependency of allocate_inventory",
         );

@@ -20,6 +20,10 @@ import {
   factsForDecision,
 } from "../../global-orchestrator/verified-facts/registry-builder.js";
 import { getCapabilityContextForDecision } from "../../capability-registry/index.js";
+import type {
+  PriorBcQueryState,
+  ToolPlanVerifyContext,
+} from "../../capability-registry/tool-plan-verify-context.js";
 
 export type TraceStage =
   | "CONTEXT_ASSEMBLED"
@@ -96,6 +100,14 @@ export interface BcInvocationState {
   priorResults?: CapabilityResult;
 }
 
+export interface BcToolExecutionRecord {
+  operationId: string;
+  toolName: string;
+  parameters: Record<string, unknown>;
+  agentState: Record<string, unknown>;
+  verifiedFacts: Record<string, unknown>;
+}
+
 export interface BcInvocationLogEntry {
   planVersion: number;
   objectiveId: string;
@@ -103,6 +115,7 @@ export interface BcInvocationLogEntry {
   objectiveDescription: string;
   toolPlan: unknown;
   result: CapabilityResult;
+  toolExecutions: BcToolExecutionRecord[];
 }
 
 export interface BcStrategicReinvokeContext {
@@ -277,6 +290,11 @@ export class RunContext {
       `Verified facts:\n${JSON.stringify(factsForDecision(this.verifiedFactRegistry))}`,
     ];
 
+    const toolEvidence = this.formatBcToolExecutionEvidence();
+    if (toolEvidence) {
+      parts.push(toolEvidence);
+    }
+
     if (this.priorDecisions.length > 0) {
       parts.push(
         `Prior decisions:\n${JSON.stringify(this.priorDecisions, null, 2)}`,
@@ -306,8 +324,15 @@ export class RunContext {
 
     const parts = [
       `Clarification needs:\n${JSON.stringify(clarifications)}`,
+      `Business intent: ${this.resolveBusinessIntent()}`,
+      `Verified facts:\n${JSON.stringify(factsForDecision(this.verifiedFactRegistry))}`,
       `User message: ${this.ctx.inbound.text}`,
     ];
+
+    const toolEvidence = this.formatBcToolExecutionEvidence();
+    if (toolEvidence) {
+      parts.push(toolEvidence);
+    }
 
     if (decision) {
       parts.unshift(`Decision:\n${JSON.stringify(decision, null, 2)}`);
@@ -416,7 +441,11 @@ export class RunContext {
     objectiveId: string,
     toolPlan: unknown,
     result: CapabilityResult,
-    meta?: { capabilityId: string; objectiveDescription: string },
+    meta?: {
+      capabilityId: string;
+      objectiveDescription: string;
+      toolExecutions?: BcToolExecutionRecord[];
+    },
   ): void {
     this.bcInvocationState.set(objectiveId, {
       priorToolPlan: toolPlan,
@@ -430,8 +459,140 @@ export class RunContext {
         objectiveDescription: meta.objectiveDescription,
         toolPlan,
         result,
+        toolExecutions: meta.toolExecutions ?? [],
       });
     }
+  }
+
+  private resolveQueryProductNameFromExecution(
+    execution: BcToolExecutionRecord,
+  ): string | undefined {
+    if (typeof execution.parameters.product_name === "string") {
+      return execution.parameters.product_name;
+    }
+
+    const agentState = execution.agentState as {
+      exactMatchCount?: number;
+      exactMatches?: Array<{ productName?: string }>;
+    };
+    if (agentState.exactMatchCount === 1 && agentState.exactMatches?.[0]) {
+      return agentState.exactMatches[0].productName;
+    }
+
+    if (typeof execution.verifiedFacts.productName === "string") {
+      return execution.verifiedFacts.productName;
+    }
+
+    return undefined;
+  }
+
+  getPriorQueryAgentStatesForCapability(
+    capabilityId: string,
+  ): PriorBcQueryState[] {
+    const states: PriorBcQueryState[] = [];
+    for (const entry of this.bcInvocationLog) {
+      if (entry.capabilityId !== capabilityId) {
+        continue;
+      }
+      if (entry.result.status !== "completed") {
+        continue;
+      }
+      for (const execution of entry.toolExecutions) {
+        if (execution.toolName !== "query_inventory") {
+          continue;
+        }
+        states.push({
+          productName: this.resolveQueryProductNameFromExecution(execution),
+          agentState: execution.agentState,
+        });
+      }
+    }
+    return states;
+  }
+
+  findPriorQueryAgentState(
+    capabilityId: string,
+    productName?: string,
+    writeTool?:
+      | "register_inventory"
+      | "update_inventory"
+      | "allocate_inventory",
+  ): Record<string, unknown> | null {
+    const normalizedTarget = productName?.trim().toLowerCase();
+    for (let i = this.bcInvocationLog.length - 1; i >= 0; i--) {
+      const entry = this.bcInvocationLog[i]!;
+      if (entry.capabilityId !== capabilityId) {
+        continue;
+      }
+      if (entry.result.status !== "completed") {
+        continue;
+      }
+
+      for (let j = entry.toolExecutions.length - 1; j >= 0; j--) {
+        const execution = entry.toolExecutions[j]!;
+        if (execution.toolName !== "query_inventory") {
+          continue;
+        }
+
+        const entryProduct = this.resolveQueryProductNameFromExecution(execution);
+        if (
+          normalizedTarget &&
+          entryProduct &&
+          entryProduct.trim().toLowerCase() !== normalizedTarget
+        ) {
+          continue;
+        }
+
+        const exactMatchCount = Number(
+          (execution.agentState as { exactMatchCount?: number }).exactMatchCount ??
+            -1,
+        );
+        if (writeTool === "register_inventory" && exactMatchCount !== 0) {
+          continue;
+        }
+        if (
+          (writeTool === "update_inventory" ||
+            writeTool === "allocate_inventory") &&
+          exactMatchCount !== 1
+        ) {
+          continue;
+        }
+
+        return execution.agentState;
+      }
+    }
+    return null;
+  }
+
+  private formatBcToolExecutionEvidence(): string {
+    if (this.bcInvocationLog.length === 0) {
+      return "";
+    }
+
+    const payload = this.bcInvocationLog.map((entry) => ({
+      objectiveId: entry.objectiveId,
+      capabilityId: entry.capabilityId,
+      objectiveDescription: entry.objectiveDescription,
+      toolPlan: entry.toolPlan,
+      capabilityResult: entry.result,
+      toolExecutions: entry.toolExecutions.map((execution) => ({
+        operationId: execution.operationId,
+        toolName: execution.toolName,
+        parameters: execution.parameters,
+        agentState: execution.agentState,
+        verifiedFacts: execution.verifiedFacts,
+      })),
+    }));
+
+    return `BC tool execution evidence (every tool run this interaction):\n${JSON.stringify(payload, null, 2)}`;
+  }
+
+  buildToolPlanVerifyContext(capabilityId: string): ToolPlanVerifyContext {
+    return {
+      capabilityId,
+      priorQueryAgentStates:
+        this.getPriorQueryAgentStatesForCapability(capabilityId),
+    };
   }
 
   buildBcStrategicReinvokeContext(
@@ -467,10 +628,11 @@ export class RunContext {
     if (strategic) {
       return [
         [
-          "Prior invocation (same capability, strategic replan):",
+          "Prior work in this capability during this run (agent state evidence):",
           `Prior objective: ${strategic.priorObjectiveDescription}`,
           `Prior tool plan:\n${JSON.stringify(strategic.priorToolPlan, null, 2)}`,
           `Prior execution results:\n${JSON.stringify(strategic.priorResults, null, 2)}`,
+          "Plan one complete tool sequence for the current objective in a single operations array. This is one-shot planning, not a ReAct loop — do not emit only the next tool because prior work exists. Include every tool still required (e.g. query_inventory then register_inventory or update_inventory when identity must be resolved).",
         ].join("\n"),
       ];
     }

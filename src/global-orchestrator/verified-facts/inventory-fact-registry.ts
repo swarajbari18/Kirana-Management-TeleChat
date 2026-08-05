@@ -16,6 +16,12 @@ const INVENTORY_FIELDS: Array<{
     label: (v, sku) => `Product name (${sku}): ${v}`,
   },
   {
+    field: "found",
+    valueType: "boolean",
+    label: (v, _sku, name) =>
+      `${name}: ${v === "true" ? "found in inventory" : "not in inventory"}`,
+  },
+  {
     field: "quantityOnHand",
     valueType: "number",
     label: (v, sku, name) => `${name} (${sku}) quantity on hand: ${v}`,
@@ -70,19 +76,35 @@ function serializeValue(value: unknown, valueType: VerifiedFactValueType): strin
   return String(value);
 }
 
+function identityKeyForFacts(verifiedFacts: Record<string, unknown>): string {
+  if (typeof verifiedFacts.sku === "string" && verifiedFacts.sku.length > 0) {
+    return verifiedFacts.sku;
+  }
+  if (typeof verifiedFacts.productName === "string") {
+    return `name_${verifiedFacts.productName.replace(/\s+/g, "_").toLowerCase()}`;
+  }
+  if (typeof verifiedFacts.operationId === "string") {
+    return verifiedFacts.operationId;
+  }
+  return "unknown";
+}
+
 function buildFactId(
   capabilityId: string,
   objectiveId: string,
   toolName: string,
-  sku: string,
+  identityKey: string,
   field: string,
 ): string {
-  return `${capabilityId}_${objectiveId}_${toolName}_${sku}_${field}`;
+  return `${capabilityId}_${objectiveId}_${toolName}_${identityKey}_${field}`;
 }
 
 export function inferInventoryToolName(
   verifiedFacts: Record<string, unknown>,
 ): string {
+  if (Array.isArray(verifiedFacts.productLookups)) {
+    return "query_inventory";
+  }
   if ("lowStockCount" in verifiedFacts || "lowStockItems" in verifiedFacts) {
     return "query_inventory";
   }
@@ -113,8 +135,26 @@ export function buildInventoryFactRecords(
   toolName: string,
   verifiedFacts: Record<string, unknown>,
 ): VerifiedFactRecord[] {
+  if (Array.isArray(verifiedFacts.productLookups)) {
+    const records: VerifiedFactRecord[] = [];
+    for (const lookup of verifiedFacts.productLookups as Array<
+      Record<string, unknown>
+    >) {
+      records.push(
+        ...buildInventoryFactRecords(
+          objectiveId,
+          capabilityId,
+          toolName,
+          lookup,
+        ),
+      );
+    }
+    return records;
+  }
+
   const records: VerifiedFactRecord[] = [];
-  const sku = String(verifiedFacts.sku ?? "unknown");
+  const identityKey = identityKeyForFacts(verifiedFacts);
+  const sku = String(verifiedFacts.sku ?? identityKey);
   const productName = String(verifiedFacts.productName ?? sku);
 
   for (const spec of INVENTORY_FIELDS) {
@@ -127,7 +167,7 @@ export function buildInventoryFactRecords(
     }
     const value = serializeValue(raw, spec.valueType);
     records.push({
-      factId: buildFactId(capabilityId, objectiveId, toolName, sku, spec.field),
+      factId: buildFactId(capabilityId, objectiveId, toolName, identityKey, spec.field),
       objectiveId,
       capabilityId,
       toolName,

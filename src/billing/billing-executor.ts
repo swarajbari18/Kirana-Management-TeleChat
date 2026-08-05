@@ -37,6 +37,7 @@ import { artifactGeneratedPayload } from "../artifact/trace-payload.js";
 import type {
   ToolPlanVerificationResult,
 } from "./execution-engine/plan-verification.js";
+import type { ParameterGroundingContext } from "../capability-registry/parameter-grounding-context.js";
 import type { ParameterGroundingResult } from "./parameter-grounding.js";
 
 export interface BillingExecutorConfig {
@@ -47,7 +48,7 @@ export interface BillingExecutorConfig {
     steps: StructuredToolPlan["operations"],
   ) => StructuredToolPlan["operations"];
   parameterGroundingCheck: (
-    objectiveDescription: string,
+    context: ParameterGroundingContext,
     step: StructuredToolPlan["operations"][number],
   ) => ParameterGroundingResult;
   mapToolError: (error: unknown) => CapabilityResult;
@@ -346,11 +347,18 @@ export function createBillingExecutor(
         byOperationId: new Map(),
         byToolName: new Map(),
       };
+      const toolExecutions: import("../store-durable-object/agent-state/run-context.js").BcToolExecutionRecord[] =
+        [];
+      const groundingContext: ParameterGroundingContext = {
+        objectiveDescription: objective.description,
+        userMessage: ctx.inbound.text,
+        priorObjectiveResults: objective.priorObjectiveResults,
+      };
 
       for (const step of ordered) {
         let groundingAttempt = 0;
         let grounding = config.parameterGroundingCheck(
-          objective.description,
+          groundingContext,
           step,
         );
 
@@ -425,7 +433,7 @@ export function createBillingExecutor(
           );
           if (retriedStep) {
             grounding = config.parameterGroundingCheck(
-              objective.description,
+              groundingContext,
               retriedStep,
             );
           } else {
@@ -482,6 +490,13 @@ export function createBillingExecutor(
 
         l1ToolResults.byOperationId.set(step.operationId, toolResult.agentState);
         l1ToolResults.byToolName.set(step.toolName, toolResult.agentState);
+        toolExecutions.push({
+          operationId: step.operationId,
+          toolName: step.toolName,
+          parameters: step.parameters,
+          agentState: toolResult.agentState,
+          verifiedFacts: toolResult.verifiedFacts,
+        });
         Object.assign(facts, toolResult.verifiedFacts);
         if (toolResult.attachments?.length) {
           attachments.push(...toolResult.attachments);
@@ -522,6 +537,7 @@ export function createBillingExecutor(
               {
                 capabilityId: config.id,
                 objectiveDescription: objective.description,
+                toolExecutions,
               },
             );
           }
@@ -543,6 +559,7 @@ export function createBillingExecutor(
           {
             capabilityId: config.id,
             objectiveDescription: objective.description,
+            toolExecutions,
           },
         );
       }

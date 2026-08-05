@@ -15,6 +15,11 @@ const MUTATING_OPS = new Set([
   "record_credit_from_bill",
 ]);
 
+const NAME_DRIVEN_OPS_REQUIRING_QUERY = new Set([
+  "record_manual_credit",
+  "record_payment",
+]);
+
 function hasPriorQueryKhata(
   operations: ToolPlanStep[],
   targetOp: ToolPlanStep,
@@ -76,7 +81,7 @@ export function verifyToolPlan(plan: StructuredToolPlan): ToolPlanVerificationRe
       }
 
       if (
-        operation !== "record_credit_from_bill" &&
+        NAME_DRIVEN_OPS_REQUIRING_QUERY.has(operation) &&
         !hasPriorQueryKhata(plan.operations, op)
       ) {
         diagnostics.push(

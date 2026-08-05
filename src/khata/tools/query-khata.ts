@@ -1,5 +1,8 @@
 import type { StoreDatabase } from "../../store-durable-object/persistence/db.js";
-import type { AgentStatePriorResults } from "../../capability-registry/capability-blueprint.js";
+import type {
+  AgentStatePriorResults,
+  ToolExecutionPlanContext,
+} from "../../capability-registry/capability-blueprint.js";
 import {
   exportFullLedger,
   getLatestBalancePaise,
@@ -14,14 +17,18 @@ import {
   formatExactCustomersMessage,
   formatSimilarCustomersMessage,
 } from "../search/customer-search.js";
-import type { QueryKhataAgentState } from "../agent-state.js";
+import {
+  followingKhataToolKind,
+  type QueryKhataAgentState,
+} from "../agent-state.js";
 import { renderKhataLedgerCsv } from "../artifact/render-khata-ledger-export.js";
 import type { OutboundAttachmentDescriptor } from "../types.js";
 
 export async function queryKhata(
   db: StoreDatabase,
   params: Record<string, unknown>,
-  priorResults: AgentStatePriorResults,
+  _priorResults: AgentStatePriorResults,
+  planContext: ToolExecutionPlanContext,
 ): Promise<{
   verifiedFacts: Record<string, unknown>;
   agentState: QueryKhataAgentState;
@@ -76,6 +83,15 @@ export async function queryKhata(
   }
 
   const exactMatches = await searchCustomersExact(db, customerName);
+  const agentState: QueryKhataAgentState = {
+    exactMatchCount: exactMatches.length,
+    exactMatches,
+    mode: "by_customer",
+  };
+
+  if (exactMatches.length === 0) {
+    agentState.similarCandidates = await searchSimilarCustomers(db, customerName);
+  }
 
   if (exactMatches.length > 1) {
     throw new ClarificationError(
@@ -84,12 +100,35 @@ export async function queryKhata(
     );
   }
 
-  if (exactMatches.length === 0) {
-    const similar = await searchSimilarCustomers(db, customerName);
+  const following = followingKhataToolKind(
+    planContext.orderedOperations,
+    planContext.currentOperationId,
+  );
+
+  if (exactMatches.length === 0 && following === "identity_write") {
+    const similar = agentState.similarCandidates ?? [];
     throw new ClarificationError(
       `No exact customer match found. Did you mean one of these?\n${formatSimilarCustomersMessage(similar)}`,
       { similarCandidates: similar },
     );
+  }
+
+  if (exactMatches.length === 0 && following === "none") {
+    return {
+      verifiedFacts: {
+        exactMatchCount: 0,
+        customer_name: customerName,
+        found: false,
+      },
+      agentState,
+    };
+  }
+
+  if (exactMatches.length === 0) {
+    return {
+      verifiedFacts: buildQueryVerifiedFacts(agentState, customerName),
+      agentState,
+    };
   }
 
   const match = exactMatches[0]!;
@@ -132,5 +171,25 @@ export async function queryKhata(
         bytes,
       },
     ],
+  };
+}
+
+function buildQueryVerifiedFacts(
+  agentState: QueryKhataAgentState,
+  customerName?: string,
+): Record<string, unknown> {
+  if (agentState.exactMatchCount === 1) {
+    const match = agentState.exactMatches[0]!;
+    return {
+      exactMatchCount: 1,
+      customer_id: match.id,
+      customer_name: match.canonicalName,
+      balance_after_paise: agentState.balanceAfterPaise,
+    };
+  }
+  return {
+    exactMatchCount: agentState.exactMatchCount,
+    customer_name: customerName,
+    found: false,
   };
 }

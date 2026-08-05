@@ -95,7 +95,12 @@ async function executeTool(
 
   switch (step.toolName) {
     case "query_khata": {
-      const result = await queryKhata(db, step.parameters, priorResults);
+      const result = await queryKhata(
+        db,
+        step.parameters,
+        priorResults,
+        planContext,
+      );
       return {
         verifiedFacts: result.verifiedFacts,
         agentState: result.agentState as unknown as Record<string, unknown>,

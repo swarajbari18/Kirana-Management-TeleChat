@@ -155,7 +155,7 @@ describe("capability blueprint BC re-invoke prompt", () => {
 
     const promptText =
       mockedGenerate.mock.calls[0]?.[2] ?? "";
-    expect(promptText.indexOf("Prior invocation (same capability, strategic replan)")).toBeLessThan(
+    expect(promptText.indexOf("Prior work in this capability during this run")).toBeLessThan(
       promptText.indexOf("Objective: commit bill sale for bill b1"),
     );
     expect(promptText).toContain("Prior objective: find Maggi SKU");

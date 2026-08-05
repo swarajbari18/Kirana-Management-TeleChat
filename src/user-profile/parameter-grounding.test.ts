@@ -3,7 +3,9 @@ import { parameterGroundingCheck } from "./parameter-grounding.js";
 
 describe("parameterGroundingCheck", () => {
   it("requires gstin when gstRegistered true", () => {
-    const result = parameterGroundingCheck("Register for GST", {
+    const result = parameterGroundingCheck(
+      { objectiveDescription: "Register for GST", userMessage: "" },
+      {
       operationId: "op1",
       operationDescription: "tax",
       toolName: "propose_tax_registration_update",
@@ -15,7 +17,9 @@ describe("parameterGroundingCheck", () => {
   });
 
   it("requires at least one identity field", () => {
-    const result = parameterGroundingCheck("Update shop name", {
+    const result = parameterGroundingCheck(
+      { objectiveDescription: "Update shop name", userMessage: "" },
+      {
       operationId: "op1",
       operationDescription: "identity",
       toolName: "propose_shop_identity_update",
@@ -26,7 +30,9 @@ describe("parameterGroundingCheck", () => {
   });
 
   it("requires non-empty instruction", () => {
-    const result = parameterGroundingCheck('Remember "always greet"', {
+    const result = parameterGroundingCheck(
+      { objectiveDescription: 'Remember "always greet"', userMessage: "" },
+      {
       operationId: "op1",
       operationDescription: "instruction",
       toolName: "update_instruction_preference",
@@ -37,7 +43,9 @@ describe("parameterGroundingCheck", () => {
   });
 
   it("passes valid tax update", () => {
-    const result = parameterGroundingCheck("Set GSTIN", {
+    const result = parameterGroundingCheck(
+      { objectiveDescription: "Set GSTIN", userMessage: "" },
+      {
       operationId: "op1",
       operationDescription: "tax",
       toolName: "propose_tax_registration_update",

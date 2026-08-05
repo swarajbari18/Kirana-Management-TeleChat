@@ -5,7 +5,7 @@ import { buildKhataFactRecords } from "../global-orchestrator/verified-facts/kha
 import { formatPaymentWithCreateCustomerConfirmation } from "./confirmation/format-khata-confirmation-table.js";
 
 describe("KHATA-PLAN-01", () => {
-  it("rejects manage without query_khata for name-driven ops", () => {
+  it("rejects record_manual_credit without query_khata", () => {
     const result = verifyToolPlan({
       operations: [
         {
@@ -22,6 +22,80 @@ describe("KHATA-PLAN-01", () => {
       ],
     });
     expect(result.valid).toBe(false);
+  });
+
+  it("allows create_customer without prior query_khata in the plan", () => {
+    const result = verifyToolPlan({
+      operations: [
+        {
+          operationId: "c1",
+          operationDescription: "create Ramesh",
+          toolName: "manage_khata_transaction",
+          parameters: {
+            operation: "create_customer",
+            customer_name: "Ramesh",
+            phone_number: "8273562398",
+          },
+          dependencies: [],
+        },
+        {
+          operationId: "q1",
+          operationDescription: "query",
+          toolName: "query_khata",
+          parameters: { customer_name: "Ramesh" },
+          dependencies: ["c1"],
+        },
+        {
+          operationId: "m1",
+          operationDescription: "credit",
+          toolName: "manage_khata_transaction",
+          parameters: {
+            operation: "record_manual_credit",
+            customer_name: "Ramesh",
+            amount: 500,
+          },
+          dependencies: ["q1"],
+        },
+      ],
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it("accepts query then create then credit for new customer flow", () => {
+    const result = verifyToolPlan({
+      operations: [
+        {
+          operationId: "q1",
+          operationDescription: "query",
+          toolName: "query_khata",
+          parameters: { customer_name: "Ramesh" },
+          dependencies: [],
+        },
+        {
+          operationId: "c1",
+          operationDescription: "create",
+          toolName: "manage_khata_transaction",
+          parameters: {
+            operation: "create_customer",
+            customer_name: "Ramesh",
+            phone_number: "8273562398",
+          },
+          dependencies: ["q1"],
+        },
+        {
+          operationId: "m1",
+          operationDescription: "credit",
+          toolName: "manage_khata_transaction",
+          parameters: {
+            operation: "record_manual_credit",
+            customer_name: "Ramesh",
+            amount: 500,
+          },
+          dependencies: ["c1"],
+        },
+      ],
+    });
+    expect(result.valid).toBe(true);
   });
 });
 
@@ -44,7 +118,9 @@ describe("KHATA-F-01", () => {
 
 describe("KHATA-GROUND-01", () => {
   it("grounds customer_name in objective", () => {
-    const ok = parameterGroundingCheck("Ramesh balance", {
+    const ok = parameterGroundingCheck(
+      { objectiveDescription: "Ramesh balance", userMessage: "" },
+      {
       operationId: "q1",
       operationDescription: "query",
       toolName: "query_khata",
@@ -53,7 +129,9 @@ describe("KHATA-GROUND-01", () => {
     });
     expect(ok.valid).toBe(true);
 
-    const fail = parameterGroundingCheck("Priya balance", {
+    const fail = parameterGroundingCheck(
+      { objectiveDescription: "Priya balance", userMessage: "" },
+      {
       operationId: "q1",
       operationDescription: "query",
       toolName: "query_khata",

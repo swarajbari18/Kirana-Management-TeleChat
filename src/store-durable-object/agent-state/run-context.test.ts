@@ -224,7 +224,7 @@ describe("run-context BC re-invoke context", () => {
 
     const slices = runContext.buildBcPlanningPriorSlices("inventory", "o2");
     expect(slices).toHaveLength(1);
-    expect(slices[0]).toContain("Prior invocation (same capability, strategic replan)");
+    expect(slices[0]).toContain("Prior work in this capability during this run");
     expect(slices[0]).toContain("Prior objective: find Maggi SKU");
     expect(slices[0]).toContain("query_inventory");
   });
@@ -255,5 +255,52 @@ describe("run-context BC re-invoke context", () => {
     expect(slice).toContain("Replan v1 results:");
     expect(slice).toContain("Replan v1 decision:");
     expect(slice).toContain("missing inventory commit");
+  });
+
+  it("decisionContextSlice includes every BC tool execution", () => {
+    const runContext = createRunContext({} as never, baseCtx);
+    runContext.storeBcInvocation(
+      "obj_inventory_lookup",
+      {
+        operations: [
+          { operationId: "op1", toolName: "query_inventory", parameters: { product_name: "sugar" } },
+          { operationId: "op2", toolName: "query_inventory", parameters: { product_name: "Maggi" } },
+        ],
+      },
+      {
+        status: "completed",
+        verifiedFacts: {
+          productLookups: [
+            { operationId: "op1", productName: "sugar", found: false },
+            { operationId: "op2", productName: "Maggi", found: false },
+          ],
+        },
+      },
+      {
+        capabilityId: "inventory",
+        objectiveDescription: "lookup products",
+        toolExecutions: [
+          {
+            operationId: "op1",
+            toolName: "query_inventory",
+            parameters: { product_name: "sugar" },
+            agentState: { exactMatchCount: 0 },
+            verifiedFacts: { productName: "sugar", found: false },
+          },
+          {
+            operationId: "op2",
+            toolName: "query_inventory",
+            parameters: { product_name: "Maggi" },
+            agentState: { exactMatchCount: 0 },
+            verifiedFacts: { productName: "Maggi", found: false },
+          },
+        ],
+      },
+    );
+
+    const slice = runContext.decisionContextSlice({ objectives: {} });
+    expect(slice).toContain("BC tool execution evidence");
+    expect(slice).toContain('"product_name": "sugar"');
+    expect(slice).toContain('"product_name": "Maggi"');
   });
 });

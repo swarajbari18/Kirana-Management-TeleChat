@@ -1,4 +1,5 @@
 import type { ToolPlanStep } from "../capability-registry/types.js";
+import type { ParameterGroundingContext } from "../capability-registry/parameter-grounding-context.js";
 
 export interface ParameterGroundingResult {
   valid: boolean;
@@ -30,9 +31,10 @@ function checkGrounded(
 }
 
 export function parameterGroundingCheck(
-  objectiveDescription: string,
+  context: ParameterGroundingContext,
   operation: ToolPlanStep,
 ): ParameterGroundingResult {
+  const objectiveDescription = context.objectiveDescription;
   const params = operation.parameters;
 
   switch (operation.toolName) {

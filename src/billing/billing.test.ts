@@ -77,8 +77,13 @@ describe("BILL-BELOW-01", () => {
 });
 
 describe("BILL-GROUND-01", () => {
-  it("fails grounding when product_name not in objective", () => {
-    const result = parameterGroundingCheck("Bill for Ramesh sugar", {
+  it("fails grounding when product_name not in objective or user message", () => {
+    const result = parameterGroundingCheck(
+      {
+        objectiveDescription: "Bill for Ramesh sugar",
+        userMessage: "",
+      },
+      {
       operationId: "op1",
       operationDescription: "add",
       toolName: "manage_draft_bill",
@@ -90,6 +95,28 @@ describe("BILL-GROUND-01", () => {
       dependencies: [],
     });
     expect(result.valid).toBe(false);
+  });
+
+  it("passes when product_name appears in user message but not billing objective", () => {
+    const result = parameterGroundingCheck(
+      {
+        objectiveDescription: "Create a new draft bill with the items and set payment method to UPI",
+        userMessage:
+          "/new make a bill: 2kg sugar, 1 Aashirvaad atta 5kg, 4 Maggi, 1 Amul butter, UPI",
+      },
+      {
+        operationId: "op1",
+        operationDescription: "add",
+        toolName: "manage_draft_bill",
+        parameters: {
+          operation: "add_item",
+          product_name: "sugar",
+          quantity: 2,
+        },
+        dependencies: [],
+      },
+    );
+    expect(result.valid).toBe(true);
   });
 });
 

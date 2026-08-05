@@ -71,6 +71,77 @@ describe("inventory plan verification INV-PLAN-01", () => {
   });
 });
 
+describe("inventory plan verification INV-PLAN-03", () => {
+  it("accepts register-only when prior query_inventory agent state exists", () => {
+    const result = verifyToolPlan(
+      {
+        operations: [
+          {
+            operationId: "r1",
+            operationDescription: "register",
+            toolName: "register_inventory",
+            parameters: {
+              product_name: "Maggi 70g",
+              item_type: "packaged",
+              unit: "packet",
+              quantity: 50,
+              cost_price: 12,
+              sell_price: 14,
+              hsn_code: "19023010",
+              gst_rate: 12,
+            },
+            dependencies: [],
+          },
+        ],
+      },
+      {
+        capabilityId: "inventory",
+        priorQueryAgentStates: [
+          {
+            productName: "Maggi 70g",
+            agentState: {
+              exactMatchCount: 0,
+              exactMatches: [],
+              lookupMode: "product_name",
+            },
+          },
+        ],
+      },
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it("accepts update-only when prior query found exactly one match", () => {
+    const result = verifyToolPlan(
+      {
+        operations: [
+          {
+            operationId: "u1",
+            operationDescription: "update",
+            toolName: "update_inventory",
+            parameters: { product_name: "Maggi 70g", quantity: 50 },
+            dependencies: [],
+          },
+        ],
+      },
+      {
+        capabilityId: "inventory",
+        priorQueryAgentStates: [
+          {
+            productName: "Maggi 70g",
+            agentState: {
+              exactMatchCount: 1,
+              exactMatches: [{ sku: "maggi-70g", productName: "Maggi 70g" }],
+              lookupMode: "product_name",
+            },
+          },
+        ],
+      },
+    );
+    expect(result.valid).toBe(true);
+  });
+});
+
 describe("inventory plan verification INV-PLAN-02", () => {
   it("rejects low_stock combined with product_name", () => {
     const result = verifyToolPlan({

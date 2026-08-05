@@ -6,7 +6,9 @@ describe("inventory parameter grounding INV-PLAN-03", () => {
     "Register Maggi 5-pack 50 packets cost 10 sell 12 HSN 19023010 GST 12%";
 
   it("passes when grounded fields appear in objective", () => {
-    const result = parameterGroundingCheck(objective, {
+    const result = parameterGroundingCheck(
+      { objectiveDescription: objective, userMessage: "" },
+      {
       operationId: "r1",
       operationDescription: "register",
       toolName: "register_inventory",
@@ -24,7 +26,9 @@ describe("inventory parameter grounding INV-PLAN-03", () => {
   });
 
   it("fails when quantity not in objective", () => {
-    const result = parameterGroundingCheck("Register Maggi 5-pack", {
+    const result = parameterGroundingCheck(
+      { objectiveDescription: "Register Maggi 5-pack", userMessage: "" },
+      {
       operationId: "r1",
       operationDescription: "register",
       toolName: "register_inventory",
